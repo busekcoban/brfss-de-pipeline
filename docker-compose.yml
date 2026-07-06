@@ -1,17 +1,13 @@
 services:
   # Interactive dashboard on http://localhost:8501
+  # Serves the static dashboard, so it needs no BigQuery credentials.
   dashboard:
     build: .
     ports:
       - "8501:8501"
-    environment:
-      GCP_PROJECT: ${GCP_PROJECT}
-      BQ_DATASET: ${BQ_DATASET:-brfss}
-      GOOGLE_APPLICATION_CREDENTIALS: /secrets/sa.json
-    volumes:
-      - ./secrets/sa.json:/secrets/sa.json:ro
 
   # Run the ETL pipeline on demand:  docker compose run --rm pipeline
+  # This one needs BigQuery access via secrets/sa.json.
   pipeline:
     build: .
     environment:
