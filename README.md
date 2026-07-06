@@ -15,7 +15,7 @@ Dataset: CDC BRFSS — *Nutrition, Physical Activity, and Obesity* — covering 
 
 ```
 CDC CSV ──► BigQuery (raw_brfss)  ──►  pipeline.py  ──►  BigQuery (brfss_features)  ──►  Streamlit dashboard
-             (raw layer, all STRING)   clean → validate → features → mining
+          (raw layer, all STRING)   clean → validate → features → mining
 ```
 
 The pipeline follows an **ELT** pattern. The raw layer keeps the source data
@@ -84,7 +84,6 @@ python pipeline.py
 ```bash
 streamlit run app.py
 ```
-Then open http://localhost:8501
 
 ---
 
@@ -100,13 +99,26 @@ pytest -q
 
 ## Docker
 
-Build and run the dashboard in a container:
+The whole project is containerized, so it runs the same way on any machine
+with Docker — no local Python setup required.
+
+Build the image:
 ```bash
 docker build -t brfss-dashboard .
+```
+
+Run the dashboard (serves static content, no credentials needed):
+```bash
 docker compose up dashboard
 ```
-BigQuery access inside the container uses a service-account key mounted at
-`secrets/sa.json` (see `docker-compose.yml`).
+
+Run the full ETL pipeline in a container (reads from and writes to BigQuery):
+```bash
+docker compose run --rm pipeline
+```
+The pipeline container authenticates to BigQuery with a service-account key
+mounted read-only at `secrets/sa.json` (configured in `docker-compose.yml`).
+The key is git-ignored and never committed.
 
 ---
 
