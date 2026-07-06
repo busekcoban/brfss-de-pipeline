@@ -1,211 +1,147 @@
-# US Nutritional Trends & Obesity (2011–2024)
+# US Obesity & Health Trends — Data Pipeline (2011–2024)
 
-Information Visualization - Group 29
-Philippe Krischker (51903174), Ekin Keskin (12551215), Buse Kucukcoban Demircioglu (12551204)
+An end-to-end data pipeline that ingests CDC BRFSS public-health data into
+**Google BigQuery**, cleans and validates it, engineers analytical features,
+runs statistical mining, and serves the results through an interactive
+**Streamlit** dashboard. The project includes automated data-quality tests,
+Docker packaging, and a CI workflow.
 
-An interactive, customizable dashboard exploring obesity, physical activity, diet, income and
-education across all US states from 2011 to 2024, built on CDC BRFSS data.
-
----
-
-## Quick Start
-
-```bash
-pip install -r requirements.txt
-python pipeline.py        # data cleaning + feature engineering + mining (run once)
-streamlit run app.py      # launch the interactive dashboard
-```
-
-Open http://localhost:8501
-
-You can also open `dashboard.html` directly in a browser. It is self-contained and needs only an
-internet connection (Plotly and the fonts are loaded from a CDN).
+Dataset: CDC BRFSS — *Nutrition, Physical Activity, and Obesity* — covering all
+50 US states plus DC, from 2011 to 2024 (110,880 raw rows).
 
 ---
 
 ## Architecture
 
-The project has two layers:
+```
+CDC CSV ──► BigQuery (raw_brfss)  ──►  pipeline.py  ──►  BigQuery (brfss_features)  ──►  Streamlit dashboard
+             (raw layer, all STRING)   clean → validate → features → mining
+```
 
-| Layer | Files | What it is |
-|-------|-------|------------|
-| Data + analysis pipeline | `pipeline.py`, `notebooks/` | Python. Cleans the raw CDC file, engineers features, runs the statistical mining, and exports the data the dashboard consumes. |
-| Interactive dashboard | `dashboard.html`, `board.js`, `charts.js`, `data.js`, `app.py` | The board that renders the interactive Plotly charts. |
+The pipeline follows an **ELT** pattern. The raw layer keeps the source data
+exactly as delivered (including its European comma decimals, e.g. `34,8`), and
+all typing and transformation happen downstream. This keeps the raw table
+faithful to the source and makes every transformation reproducible.
 
-`app.py` is a thin Streamlit wrapper that embeds the self-contained `dashboard.html` as a
-full-page component, so the dashboard runs identically inside Streamlit or as a standalone HTML file.
-
-### The dashboard board
-
-The dashboard is a board written in vanilla JavaScript, with no dashboarding library and no build step:
-
-- Tiles are free-positioned on a fixed 1600×900 board that is CSS-scaled to fit the screen (`board.js`).
-- Each tile can be dragged, resized with grid snapping, removed, or added from a palette, using raw pointer events.
-- The layout is saved to the browser's `localStorage` and restored on the next visit; a reset button restores the default layout.
-- Each tile renders an interactive Plotly chart (`charts.js`) wired to a shared `year` context.
-
----
-
-## Data
-
-Source: CDC BRFSS - *Nutrition, Physical Activity, and Obesity* (Behavioral Risk Factor
-Surveillance System)
-Coverage: 110,880 rows × 33 columns, 2011–2024, 51 US locations (50 states + DC)
-URL: https://data.cdc.gov/Nutrition-Physical-Activity-and-Obesity/Nutrition-Physical-Activity-and-Obesity-Behavioral/hn4x-zwk7
-(also linked from `Download Dataset.url` in this folder)
-
-> The raw file (`Nutrition_Physical_Activity_Obesity.csv`, ~48 MB) and the intermediate
-> cleaned/interpolated CSVs are excluded from this submission to keep it small. Download the raw
-> file from the link above (or the `Download Dataset.url` shortcut), save it as that filename under
-> `data/`, and run `python pipeline.py` to regenerate everything. The final `brfss_features.csv`
-> (used by the analysis) is included under `data/` for inspection.
+| Layer | Files | Description |
+|-------|-------|-------------|
+| Ingestion | `load_raw_to_bq.py`, `bq.py` | Loads the raw CSV into BigQuery as text. |
+| Transformation | `pipeline.py` | Cleans, validates, engineers features, and mines statistics. |
+| Data quality | `validation.py`, `tests/` | Reusable checks, run in the pipeline and in CI. |
+| Serving | `app.py`, `dashboard.html` | Streamlit app embedding an interactive dashboard. |
+| Config | `config.py`, `.env` | Environment-based settings (no secrets in code). |
 
 ---
 
-## Data Cleaning
+## Pipeline steps
 
-Six steps applied in `pipeline.py` (walkthrough in `notebooks/01_data_cleaning.ipynb`):
-
-1. Column pruning - dropped 5 columns with >95% missing or constant content
-   (`Data_Value_Unit`, `Total`, `Data_Value_Alt`, `Data_Value_Type`, `Datasource`).
-2. Location filtering - removed the National aggregate and non-state territories (Guam, Puerto
-   Rico, Virgin Islands): 8,064 rows dropped.
-3. Decimal conversion - CDC stores European comma decimals (e.g. `34,8`); converted to float in
-   `Data_Value_Num`.
-4. Suppressed-value handling - 13,214 rows are flagged by CDC for insufficient sample size:
-   - *Static views* (choropleth, scatter, bars): suppressed values stay `NaN` - only measured values shown.
-   - *Time-series views* (lines, trends): linear interpolation within each
-     (state × question × stratification) group, max 3 consecutive gaps, recovering 3,478 values.
-5. Label normalization - stripped whitespace from stratification labels to prevent filter mismatches.
-6. Level-2 imputation - 147 Race/Ethnicity rows still `NaN` after interpolation were filled with
-   the national demographic mean for the same group × year (one aggregation level up, not fabricated).
-
-Output files (regenerated by the pipeline):
-
-| File | Rows | Description |
-|------|------|-------------|
-| `data/brfss_cleaned.csv` | 102,816 | Suppressed values = `NaN` |
-| `data/brfss_interpolated.csv` | 102,816 | Time-series gaps filled |
-| `data/brfss_features.csv` | 18,112 | Wide format, complete for core metrics |
+1. **Ingest** — the raw CSV is loaded into BigQuery with every column typed as
+   `STRING`, so source formatting is preserved.
+2. **Clean** — drop empty columns, remove non-state rows, convert comma decimals
+   to numbers, handle CDC-suppressed values, and interpolate time-series gaps.
+3. **Validate** — data-quality gate: year completeness, no duplicates, value
+   ranges, expected location count, and valid category set.
+4. **Feature engineering** — pivot metrics to columns, add income levels, yearly
+   obesity change, income-gap and US-region features.
+5. **Mining** — Pearson correlations with confidence intervals, ANOVA across
+   income and education groups, and Apriori association rules.
+6. **Load** — the final feature table is written back to BigQuery.
 
 ---
 
-## Feature Engineering
+## Getting started
 
-Applied in `pipeline.py`:
+### Prerequisites
+- Python 3.12+
+- A Google Cloud project with the BigQuery API enabled
+- `gcloud` CLI installed
 
-- `obesity_rate`, `pa_none_rate`, … - pivoted long → wide; one metric per column.
-- `income_level` - three-category mapping of the six CDC income brackets
-  (Low: `<$15k`, `$15–25k`; Medium: `$25–35k`, `$35–50k`; High: `$50–75k`, `$75k+`).
-- `year_delta_obesity` - obesity change 2011 → 2024 per state.
-- `stratification_gap_income` - obesity range across income groups per state-year.
-- `region` - US Census region (South, Northeast, Midwest, West).
-- `obesity_cat` - binned `<25`, `25–30`, `30–35`, `>35`.
+### 1. Configure
+Create a `.env` file in the project root:
+```
+GCP_PROJECT=your-gcp-project-id
+BQ_DATASET=brfss
+BQ_LOCATION=US
+```
 
----
+### 2. Authenticate
+```bash
+gcloud auth application-default login
+```
 
-## Statistical Mining
+### 3. Install dependencies
+```bash
+pip install -r requirements.txt
+```
 
-Run inside `pipeline.py → mining()` (uses `scipy` and `mlxtend`):
+### 4. Load data and run the pipeline
+```bash
+python load_raw_to_bq.py data/Nutrition_Physical_Activity_Obesity.csv
+python pipeline.py
+```
 
-- Pearson correlations with 95% CIs across the five core metrics.
-- Stratified correlations (inactivity vs obesity) per demographic group.
-- One-way ANOVA across income groups.
-- Apriori association-rule mining (`mlxtend`, min support 0.05, min confidence 0.5).
-
----
-
-## Research Questions & Findings
-
-> All figures below match the values displayed in the live dashboard.
-
-### RQ1 - How has obesity evolved across US states (2011–2024)?
-
-National obesity rose from 27.6% (2011) to 33.9% (2024) - +6.3 pp. Southern and Midwestern
-states show the largest increases; West Virginia (41.4%), Mississippi and Louisiana are
-consistently highest, Colorado (25.0%) lowest (2024).
-
-### RQ2 - Does higher physical activity translate to lower obesity across groups?
-
-At the state level, physical activity and obesity are negatively correlated, r = −0.71
-(p < 0.001) - more active states are less obese. But race/ethnicity is a strong moderator: the
-relationship holds clearly for some groups and weakly for others, so it does not hold uniformly.
-In the correlation matrix, inactivity ↔ obesity = +0.54 and low fruit intake ↔ obesity = +0.77.
-
-### RQ3 - How do income and education shape obesity?
-
-Obesity differs significantly across income groups (ANOVA F = 155, p < 0.001) and across
-education levels (9.4 pp gap, <HS 34.7% vs college 25.3%). The income gap between the lowest and
-highest brackets narrowed over time, from 8.6 pp (2011) to 2.7 pp (2024) - driven by obesity
-rising faster among higher-income groups. Association rule: low income → high inactivity + high
-obesity (lift = 2.0).
-
-### RQ4 - Which population groups face the greatest obesity risk?
-
-Highest rates: NH Hawaiian/Pacific Islander (39.1%), Non-Hispanic Black (38.2%),
-NH American Indian/Alaska Native (37.1%). The strongest risk cluster combines Southern region +
-low income + physical inactivity.
+### 5. Launch the dashboard
+```bash
+streamlit run app.py
+```
+Then open http://localhost:8501
 
 ---
 
-## Visualizations
+## Tests
 
-| Tile | Type | Interaction |
-|------|------|-------------|
-| Geographic Distribution | Choropleth with state labels | Year slider (2011–2024) drives all KPI cards + trend line |
-| Trends Over Time | Regional line chart + US average | Linked to the year context |
-| Activity vs Obesity | Scatter + OLS trend line (`r = −0.71`) | Region color coding, hover |
-| Income–Obesity Gap | Area/ribbon chart | Hover tooltips |
-| Health Correlations | Pearson heatmap (5 metrics) | Hover |
-| Most At-Risk Groups | Horizontal bar, category legend | Hover |
-| Association Rules | Insight tile | - |
-
-Every tile is draggable, resizable, removable and addable, and the layout persists across
-visits.
+Data-quality checks are unit-tested and require no cloud access:
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
 
 ---
 
-## Tools & Libraries
+## Docker
 
-| Tool | Role | Where |
-|------|------|-------|
-| pandas / numpy | Loading, cleaning, aggregation, feature engineering | `pipeline.py` |
-| scipy | Pearson correlations, ANOVA | `pipeline.py` |
-| mlxtend | Apriori association-rule mining | `pipeline.py` |
-| matplotlib | Static annotated line chart (`data/matplotlib_trend.png`) | `notebooks/` *(offline only)* |
-| seaborn | Print-ready correlation heatmap (`data/seaborn_heatmap.png`) | `notebooks/` *(offline only)* |
-| altair | Declarative income bar chart (`data/altair_income.json`) | `notebooks/` *(offline only)* |
-| Plotly.js | All live, interactive dashboard charts | `charts.js` |
-| Vanilla JS | Board engine (drag/resize/persist) | `board.js` |
-| Streamlit | Wrapper that serves the dashboard | `app.py` |
-| Jupyter | `01_data_cleaning.ipynb`, `02_exploratory_analysis.ipynb` | `notebooks/` |
-
-> matplotlib, seaborn and altair are used only in the notebooks for exploratory and print-ready
-> static figures. The live dashboard renders every chart with Plotly inside the custom board —
-> it does not use those three libraries at runtime.
+Build and run the dashboard in a container:
+```bash
+docker build -t brfss-dashboard .
+docker compose up dashboard
+```
+BigQuery access inside the container uses a service-account key mounted at
+`secrets/sa.json` (see `docker-compose.yml`).
 
 ---
 
-## Deviations from Proposal
+## Continuous Integration
 
-- Replaced the planned multi-page Streamlit layout with a single customizable board (drag/resize/persist).
-- Added the income-inequality gap chart and a US-average line on the regional trend.
-- Added ANOVA and Apriori association mining to the analysis.
-- Used a year slider for the choropleth instead of standalone Plotly animation, for reliability.
+`.github/workflows/ci.yml` runs on every push and pull request:
+- installs test dependencies and runs `pytest`
+- builds the Docker image once tests pass
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
-app.py                 Streamlit wrapper (embeds dashboard.html)
-dashboard.html         Self-contained dashboard build
-board.js               Custom board engine (drag/resize/add/remove/persist)
-charts.js              Plotly chart definitions per tile
-data.js                Pre-computed data consumed by the charts
-pipeline.py            Cleaning + feature engineering + statistical mining
-requirements.txt       Python dependencies
-notebooks/             Cleaning walkthrough + exploratory analysis
-data/                  features.csv + static notebook outputs (PNG/JSON)
-Project Proposal - Group 29.pdf
+.
+├── config.py              # environment-based settings
+├── bq.py                  # BigQuery load / read / write helpers
+├── load_raw_to_bq.py      # one-time raw CSV -> BigQuery
+├── pipeline.py            # clean -> validate -> features -> mining -> load
+├── validation.py          # reusable data-quality checks
+├── app.py, dashboard.html # Streamlit dashboard
+├── tests/                 # pytest data-quality tests
+├── Dockerfile, docker-compose.yml
+├── .github/workflows/ci.yml
+├── requirements.txt, requirements-dev.txt
+└── data/                  # feature table (raw CSV excluded — see note)
 ```
+
+> The raw file (`data/Nutrition_Physical_Activity_Obesity.csv`, ~48 MB) is not
+> committed. Download it from the CDC and place it under `data/`:
+> https://data.cdc.gov/Nutrition-Physical-Activity-and-Obesity/Nutrition-Physical-Activity-and-Obesity-Behavioral/hn4x-zwk7
+
+---
+
+## Tech stack
+
+Python · pandas · Google BigQuery · Streamlit · Plotly · SciPy · mlxtend ·
+pytest · Docker · GitHub Actions
