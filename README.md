@@ -1,20 +1,23 @@
 # US Obesity & Health Trends — Data Pipeline (2011–2024)
 
+[![CI](https://github.com/busekcoban/brfss-de-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/busekcoban/brfss-de-pipeline/actions/workflows/ci.yml)
+
+**🔗 Live demo:** https://brfss-dashboard.streamlit.app/
+
 An end-to-end data pipeline that ingests CDC BRFSS public-health data into
 **Google BigQuery**, cleans and validates it, engineers analytical features,
 runs statistical mining, and serves the results through an interactive
 **Streamlit** dashboard. The project includes automated data-quality tests,
 Docker packaging, and a CI workflow.
 
-Dataset: CDC BRFSS — *Nutrition, Physical Activity, and Obesity* — covering all
-50 US states plus DC, from 2011 to 2024 (110,880 raw rows).
+Dataset: CDC BRFSS — *Nutrition, Physical Activity, and Obesity* 
 
 ---
 
 ## Architecture
 
 ```
-CDC CSV ──► BigQuery (raw_brfss)  ──►  pipeline.py  ──►  BigQuery (brfss_features)  ──►  Streamlit dashboard
+CDC CSV ──► BigQuery (raw_brfss)  ──►  pipeline.py ──►  BigQuery (brfss_features)  ──►  Streamlit dashboard
           (raw layer, all STRING)   clean → validate → features → mining
 ```
 
