@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.github/
+.idea/
+.pytest_cache/
+notebooks/
+secrets/
+.env
+*.pdf
+screenshot.png
+# keep the small features CSV, exclude the big raw/intermediate ones
+data/Nutrition_Physical_Activity_Obesity.csv
+data/brfss_cleaned.csv
+data/brfss_interpolated.csv

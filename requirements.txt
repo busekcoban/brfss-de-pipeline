@@ -1,0 +1,16 @@
+pandas
+numpy
+scipy
+mlxtend
+streamlit
+plotly
+nbformat
+altair
+matplotlib
+seaborn
+google-cloud-bigquery
+google-cloud-bigquery-storage
+db-dtypes
+pyarrow
+python-dotenv
+pytest

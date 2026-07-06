@@ -1,0 +1,4 @@
+# Lightweight deps for running unit tests (used by CI).
+pandas
+numpy
+pytest

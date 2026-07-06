@@ -1,0 +1,25 @@
+services:
+  # Interactive dashboard on http://localhost:8501
+  dashboard:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      GCP_PROJECT: ${GCP_PROJECT}
+      BQ_DATASET: ${BQ_DATASET:-brfss}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/sa.json
+    volumes:
+      - ./secrets/sa.json:/secrets/sa.json:ro
+
+  # Run the ETL pipeline on demand:  docker compose run --rm pipeline
+  pipeline:
+    build: .
+    environment:
+      GCP_PROJECT: ${GCP_PROJECT}
+      BQ_DATASET: ${BQ_DATASET:-brfss}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/sa.json
+    volumes:
+      - ./secrets/sa.json:/secrets/sa.json:ro
+      - ./data:/app/data
+    command: python pipeline.py
+    profiles: ["tools"]

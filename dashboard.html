@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US Obesity & Health Trends — CDC Data</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  :root{
+    --bg:#C0E1D2;
+    --bg-2:#A8C5BA;
+    --surface:#F6F4E8;
+    --card:#FFFDF8;
+    --ink:#2C2416;
+    --ink-soft:#7A6E62;
+    --line:#2C2416;
+    --violet:#7A9BAA;
+    --magenta:#C00707;
+    --orange:#C8B89A;
+    --green:#A8C5BA;
+    --cyan:#C0E1D2;
+    --shadow:5px 5px 0 var(--ink);
+    --shadow-sm:3px 3px 0 var(--ink);
+    --blob1:rgba(220,155,155,0.18);
+    --blob2:rgba(168,197,186,0.22);
+}
+  html,body{height:100%;}
+  body{
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(120% 90% at 100% 0%, var(--blob1), transparent 55%),
+      radial-gradient(110% 90% at 0% 100%, var(--blob2), transparent 55%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    display:flex;flex-direction:column;height:100vh;overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── Top bar ─────────────────────────────────────────── */
+  .topbar{
+    display:flex;align-items:center;gap:18px;
+    padding:14px 22px;border-bottom:2px solid var(--ink);
+    background:var(--bg);flex:0 0 auto;z-index:50;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px;min-width:0;}
+  .brand .mark{
+    font-family:'Syne',sans-serif;font-weight:800;font-size:22px;letter-spacing:-0.02em;
+    background:var(--ink);color:var(--bg);padding:4px 11px 5px;border-radius:8px;white-space:nowrap;
+    box-shadow:var(--shadow-sm);
+  }
+  .brand .ttl{font-family:'Syne',sans-serif;font-weight:700;font-size:20px;letter-spacing:-0.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .brand .sub{font-size:12px;color:var(--ink-soft);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+  .spacer{flex:1;}
+  .controls{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
+  .btn{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;
+    border:2px solid var(--ink);background:var(--card);color:var(--ink);
+    padding:8px 15px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+    transition:transform .08s, box-shadow .08s;box-shadow:var(--shadow-sm);
+  }
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink);}
+  .btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink);}
+  .btn.primary{background:var(--ink);color:var(--bg);}
+  .btn .ic{font-size:15px;line-height:1;}
+
+  /* ── Stage + board ───────────────────────────────────── */
+  .stage{flex:1;position:relative;overflow:hidden;}
+  .board{
+    position:absolute;left:50%;top:50%;
+    width:1600px;height:900px;transform-origin:center center;
+    background:var(--surface);
+    border:2px solid var(--ink);border-radius:18px;
+    box-shadow:10px 10px 0 rgba(22,20,15,0.22);
+    overflow:hidden;
+  }
+  /* clean board surface — snap-grid still active, just not drawn */
+
+  /* ── Tiles ───────────────────────────────────────────── */
+  .tile{
+    position:absolute;background:var(--card);
+    border:2px solid var(--ink);border-radius:14px;
+    box-shadow:var(--shadow);
+    display:flex;flex-direction:column;overflow:hidden;
+    transition:box-shadow .12s;
+  }
+  .tile.dragging,.tile.resizing{box-shadow:8px 8px 0 var(--ink);}
+  body[data-mode="view"] .tile{box-shadow:var(--shadow-sm);}
+  .tbar{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    gap:8px;padding:8px 11px;border-bottom:2px solid var(--ink);
+    background:var(--card);cursor:grab;user-select:none;
+  }
+  body[data-mode="view"] .tbar{cursor:default;}
+  .tbar.dragging{cursor:grabbing;}
+  .tbar-l{display:flex;align-items:center;gap:8px;min-width:0;}
+  .tdot{width:9px;height:9px;border-radius:50%;background:var(--orange);border:1.5px solid var(--ink);flex:0 0 auto;}
+  .tile-kpi .tdot{background:var(--green);}
+  .tile-insight .tdot{background:var(--violet);}
+  .tname{font-weight:600;font-size:12.5px;letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tbar-r{display:flex;align-items:center;gap:7px;flex:0 0 auto;}
+  .ttool{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;
+    color:var(--ink-soft);background:rgba(22,20,15,0.06);padding:3px 7px;border-radius:5px;
+  }
+  .tx{
+    width:20px;height:20px;border:1.5px solid var(--ink);background:var(--card);border-radius:6px;
+    font-size:10px;line-height:1;cursor:pointer;color:var(--ink);display:none;align-items:center;justify-content:center;
+  }
+  .tx:hover{background:var(--magenta);color:#fff;}
+  body[data-mode="edit"] .tx{display:flex;}
+  .tbody{flex:1;position:relative;overflow:hidden;}
+  .tile-plot .tbody{padding:6px 8px 4px;}
+  .plot{width:100%;height:100%;}
+  .tgrip{
+    position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;display:none;z-index:5;
+    background:linear-gradient(135deg, transparent 46%, var(--ink) 46%, var(--ink) 56%, transparent 56%, transparent 72%, var(--ink) 72%, var(--ink) 82%, transparent 82%);
+  }
+  body[data-mode="edit"] .tgrip{display:block;}
+
+  /* ── KPI tile ────────────────────────────────────────── */
+  .kpi-wrap{padding:13px 16px;height:100%;display:flex;flex-direction:column;justify-content:center;gap:5px;}
+  .kpi-val{font-family:'Syne',sans-serif;font-weight:800;font-size:40px;line-height:1;letter-spacing:-0.03em;color:var(--kc);display:flex;align-items:baseline;}
+  .kpi-num{font-variant-numeric:tabular-nums;}
+  .kpi-suf{font-size:21px;margin-left:3px;}
+  .kpi-lbl{font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.15;letter-spacing:-0.005em;}
+  .kpi-sub{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-soft);line-height:1.4;}
+
+  /* ── Map control ─────────────────────────────────────── */
+  .map-ctrl{display:flex;align-items:center;gap:10px;padding:2px 4px 8px;}
+  .map-ctrl-lbl{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--ink-soft);}
+  .yr-range{flex:1;accent-color:var(--magenta);height:4px;cursor:pointer;}
+  .yr-out{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--ink);background:var(--yellow,#FFD92E);background:var(--bg);border:1.5px solid var(--ink);padding:1px 8px;border-radius:6px;min-width:52px;text-align:center;}
+  .map-avg{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-soft);min-width:64px;text-align:right;}
+  .map-plot{width:100%;height:calc(100% - 30px);}
+
+  /* ── Rules (insight) ─────────────────────────────────── */
+  .rules{display:flex;flex-direction:column;gap:8px;padding:10px 12px;height:100%;overflow:auto;}
+  .rule{display:flex;gap:18px;align-items:center;}
+  .rule-m{font-family:'Syne',sans-serif;font-weight:800;font-size:21px;color:var(--rc);min-width:58px;flex:0 0 58px;text-align:left;letter-spacing:-0.02em;line-height:1;}
+  .rule-t{font-size:12px;line-height:1.32;color:var(--ink);flex:1;}
+  .rule-t b{font-weight:700;}
+
+  /* ── Palette ─────────────────────────────────────────── */
+  .palette{
+    position:absolute;left:16px;top:16px;bottom:16px;width:264px;z-index:60;
+    background:var(--card);border:2px solid var(--ink);border-radius:14px;
+    box-shadow:var(--shadow);display:flex;flex-direction:column;
+    transform:translateX(-300px);opacity:0;pointer-events:none;transition:transform .22s cubic-bezier(.2,.8,.2,1), opacity .22s;
+  }
+  .palette.open{transform:translateX(0);opacity:1;pointer-events:auto;}
+  .pal-head{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-bottom:2px solid var(--ink);}
+  .pal-head h3{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;}
+  .pal-head .pal-sub{font-size:11px;color:var(--ink-soft);font-family:'JetBrains Mono',monospace;}
+  .pal-x{border:1.5px solid var(--ink);background:var(--card);width:24px;height:24px;border-radius:7px;cursor:pointer;font-size:12px;}
+  .pal-x:hover{background:var(--magenta);color:#fff;}
+  #palette-list{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:8px;}
+  .pitem{
+    display:flex;align-items:center;gap:11px;text-align:left;
+    border:2px solid var(--ink);background:var(--card);border-radius:10px;padding:9px 11px;cursor:pointer;
+    transition:transform .08s,box-shadow .08s;box-shadow:2px 2px 0 var(--ink);
+  }
+  .pitem:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink);background:#FFFCEC;}
+  .pitem:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--ink);}
+  .pi-ic{width:30px;height:30px;border-radius:8px;border:1.5px solid var(--ink);flex:0 0 auto;background:var(--magenta);}
+  .pi-plot{background:linear-gradient(135deg,var(--orange),var(--magenta));}
+  .pi-kpi{background:var(--green);}
+  .pi-insight{background:var(--violet);}
+  .pi-tx{display:flex;flex-direction:column;flex:1;min-width:0;}
+  .pi-n{font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pi-t{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.05em;}
+  .pi-add{font-size:17px;font-weight:700;color:var(--ink);}
+
+  /* ── Hint ─────────────────────────────────────────────── */
+  .hint{
+    position:absolute;right:18px;bottom:12px;z-index:40;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(22,20,15,0.42);
+  }
+  body[data-mode="view"] .hint{display:none;}
+
+  .tile,.btn,.pitem,.palette{animation:pop .35s cubic-bezier(.2,.9,.3,1.2);}
+  @keyframes pop{from{transform:scale(.97);}to{transform:scale(1);}}
+  #modeBtn { display: none; }
+  .ttool { display: none; }
+</style>
+</head>
+<body data-mode="edit">
+
+  <!-- ═══ TOP BAR ═══ -->
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark">US Obesity &amp; Health Trends</span>
+      <span class="sub">Nutrition, Physical Activity &amp; Obesity (2011–2024)</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="controls">
+      <button class="btn" id="modeBtn" data-next="view">View</button>
+    </div>
+  </div>
+
+  <!-- ═══ STAGE ═══ -->
+  <div class="stage" id="stage">
+    <div class="board" id="board"></div>
+
+    <!-- palette -->
+    <aside class="palette" id="palette">
+      <div class="pal-head">
+        <div>
+          <h3>Visuals</h3>
+          <div class="pal-sub">click to add · drag to move</div>
+        </div>
+        <button class="pal-x" id="palClose">✕</button>
+      </div>
+      <div id="palette-list"></div>
+    </aside>
+  </div>
+
+  <script>const DATA = {
+  map: [{"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2011, "obesity_rate": 32.0, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2012, "obesity_rate": 33.0, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2013, "obesity_rate": 32.4, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2014, "obesity_rate": 33.5, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2015, "obesity_rate": 35.6, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2016, "obesity_rate": 35.7, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2017, "obesity_rate": 36.3, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2018, "obesity_rate": 36.2, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2019, "obesity_rate": 36.1, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2020, "obesity_rate": 39.0, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2021, "obesity_rate": 39.9, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2022, "obesity_rate": 38.3, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2023, "obesity_rate": 39.2, "region": "South"}, {"LocationAbbr": "AL", "LocationDesc": "Alabama", "YearStart": 2024, "obesity_rate": 38.9, "region": "South"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2011, "obesity_rate": 27.4, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2012, "obesity_rate": 25.7, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2013, "obesity_rate": 28.4, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2014, "obesity_rate": 29.7, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2015, "obesity_rate": 29.8, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2016, "obesity_rate": 31.4, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2017, "obesity_rate": 34.2, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2018, "obesity_rate": 29.5, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2019, "obesity_rate": 30.5, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2020, "obesity_rate": 31.9, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2021, "obesity_rate": 33.5, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2022, "obesity_rate": 32.1, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2023, "obesity_rate": 35.2, "region": "West"}, {"LocationAbbr": "AK", "LocationDesc": "Alaska", "YearStart": 2024, "obesity_rate": 34.0, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2011, "obesity_rate": 25.1, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2012, "obesity_rate": 26.0, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2013, "obesity_rate": 26.8, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2014, "obesity_rate": 28.9, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2015, "obesity_rate": 28.4, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2016, "obesity_rate": 29.0, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2017, "obesity_rate": 29.5, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2018, "obesity_rate": 29.5, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2019, "obesity_rate": 31.4, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2020, "obesity_rate": 30.9, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2021, "obesity_rate": 31.3, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2022, "obesity_rate": 33.2, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2023, "obesity_rate": 31.9, "region": "West"}, {"LocationAbbr": "AZ", "LocationDesc": "Arizona", "YearStart": 2024, "obesity_rate": 33.3, "region": "West"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2011, "obesity_rate": 30.9, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2012, "obesity_rate": 34.5, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2013, "obesity_rate": 34.6, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2014, "obesity_rate": 35.9, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2015, "obesity_rate": 34.5, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2016, "obesity_rate": 35.7, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2017, "obesity_rate": 35.0, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2018, "obesity_rate": 37.1, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2019, "obesity_rate": 37.4, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2020, "obesity_rate": 36.4, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2021, "obesity_rate": 38.7, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2022, "obesity_rate": 37.4, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2023, "obesity_rate": 40.0, "region": "South"}, {"LocationAbbr": "AR", "LocationDesc": "Arkansas", "YearStart": 2024, "obesity_rate": 38.9, "region": "South"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2011, "obesity_rate": 23.8, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2012, "obesity_rate": 25.0, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2013, "obesity_rate": 24.1, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2014, "obesity_rate": 24.7, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2015, "obesity_rate": 24.2, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2016, "obesity_rate": 25.0, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2017, "obesity_rate": 25.1, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2018, "obesity_rate": 25.8, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2019, "obesity_rate": 26.2, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2020, "obesity_rate": 30.3, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2021, "obesity_rate": 27.6, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2022, "obesity_rate": 28.1, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2023, "obesity_rate": 27.7, "region": "West"}, {"LocationAbbr": "CA", "LocationDesc": "California", "YearStart": 2024, "obesity_rate": 29.1, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2011, "obesity_rate": 20.7, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2012, "obesity_rate": 20.5, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2013, "obesity_rate": 21.3, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2014, "obesity_rate": 21.3, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2015, "obesity_rate": 20.2, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2016, "obesity_rate": 22.3, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2017, "obesity_rate": 22.6, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2018, "obesity_rate": 23.0, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2019, "obesity_rate": 23.8, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2020, "obesity_rate": 24.2, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2021, "obesity_rate": 25.1, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2022, "obesity_rate": 25.0, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2023, "obesity_rate": 24.9, "region": "West"}, {"LocationAbbr": "CO", "LocationDesc": "Colorado", "YearStart": 2024, "obesity_rate": 25.0, "region": "West"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2011, "obesity_rate": 24.5, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2012, "obesity_rate": 25.6, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2013, "obesity_rate": 25.0, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2014, "obesity_rate": 26.3, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2015, "obesity_rate": 25.3, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2016, "obesity_rate": 26.0, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2017, "obesity_rate": 26.9, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2018, "obesity_rate": 27.4, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2019, "obesity_rate": 29.1, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2020, "obesity_rate": 29.2, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2021, "obesity_rate": 30.4, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2022, "obesity_rate": 30.6, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2023, "obesity_rate": 29.4, "region": "Northeast"}, {"LocationAbbr": "CT", "LocationDesc": "Connecticut", "YearStart": 2024, "obesity_rate": 32.0, "region": "Northeast"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2011, "obesity_rate": 28.8, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2012, "obesity_rate": 26.9, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2013, "obesity_rate": 31.1, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2014, "obesity_rate": 30.7, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2015, "obesity_rate": 29.7, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2016, "obesity_rate": 30.7, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2017, "obesity_rate": 31.8, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2018, "obesity_rate": 33.5, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2019, "obesity_rate": 34.4, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2020, "obesity_rate": 36.5, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2021, "obesity_rate": 33.9, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2022, "obesity_rate": 37.9, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2023, "obesity_rate": 35.7, "region": "South"}, {"LocationAbbr": "DE", "LocationDesc": "Delaware", "YearStart": 2024, "obesity_rate": 36.6, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2011, "obesity_rate": 23.7, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2012, "obesity_rate": 21.9, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2013, "obesity_rate": 22.9, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2014, "obesity_rate": 21.7, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2015, "obesity_rate": 22.1, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2016, "obesity_rate": 22.6, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2017, "obesity_rate": 23.0, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2018, "obesity_rate": 24.7, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2019, "obesity_rate": 23.8, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2020, "obesity_rate": 24.3, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2021, "obesity_rate": 24.7, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2022, "obesity_rate": 24.3, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2023, "obesity_rate": 23.5, "region": "South"}, {"LocationAbbr": "DC", "LocationDesc": "District of Columbia", "YearStart": 2024, "obesity_rate": 25.5, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2011, "obesity_rate": 26.6, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2012, "obesity_rate": 25.2, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2013, "obesity_rate": 26.4, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2014, "obesity_rate": 26.2, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2015, "obesity_rate": 26.8, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2016, "obesity_rate": 27.4, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2017, "obesity_rate": 28.4, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2018, "obesity_rate": 30.7, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2019, "obesity_rate": 27.0, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2020, "obesity_rate": 28.4, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2021, "obesity_rate": 30.0, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2022, "obesity_rate": 31.6, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2023, "obesity_rate": 30.1, "region": "South"}, {"LocationAbbr": "FL", "LocationDesc": "Florida", "YearStart": 2024, "obesity_rate": 29.6, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2011, "obesity_rate": 28.0, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2012, "obesity_rate": 29.1, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2013, "obesity_rate": 30.3, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2014, "obesity_rate": 30.5, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2015, "obesity_rate": 30.7, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2016, "obesity_rate": 31.4, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2017, "obesity_rate": 31.6, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2018, "obesity_rate": 32.5, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2019, "obesity_rate": 33.1, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2020, "obesity_rate": 34.3, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2021, "obesity_rate": 33.9, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2022, "obesity_rate": 37.0, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2023, "obesity_rate": 35.0, "region": "South"}, {"LocationAbbr": "GA", "LocationDesc": "Georgia", "YearStart": 2024, "obesity_rate": 35.4, "region": "South"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2011, "obesity_rate": 21.8, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2012, "obesity_rate": 23.6, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2013, "obesity_rate": 21.8, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2014, "obesity_rate": 22.1, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2015, "obesity_rate": 22.7, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2016, "obesity_rate": 23.8, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2017, "obesity_rate": 23.8, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2018, "obesity_rate": 24.9, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2019, "obesity_rate": 25.0, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2020, "obesity_rate": 24.5, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2021, "obesity_rate": 25.0, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2022, "obesity_rate": 25.9, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2023, "obesity_rate": 26.1, "region": "West"}, {"LocationAbbr": "HI", "LocationDesc": "Hawaii", "YearStart": 2024, "obesity_rate": 27.0, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2011, "obesity_rate": 27.0, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2012, "obesity_rate": 26.8, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2013, "obesity_rate": 29.6, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2014, "obesity_rate": 28.9, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2015, "obesity_rate": 28.6, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2016, "obesity_rate": 27.4, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2017, "obesity_rate": 29.3, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2018, "obesity_rate": 28.4, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2019, "obesity_rate": 29.5, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2020, "obesity_rate": 31.1, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2021, "obesity_rate": 31.6, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2022, "obesity_rate": 33.2, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2023, "obesity_rate": 31.0, "region": "West"}, {"LocationAbbr": "ID", "LocationDesc": "Idaho", "YearStart": 2024, "obesity_rate": 32.7, "region": "West"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2011, "obesity_rate": 27.1, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2012, "obesity_rate": 28.1, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2013, "obesity_rate": 29.4, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2014, "obesity_rate": 29.3, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2015, "obesity_rate": 30.8, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2016, "obesity_rate": 31.6, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2017, "obesity_rate": 31.1, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2018, "obesity_rate": 31.8, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2019, "obesity_rate": 31.6, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2020, "obesity_rate": 32.4, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2021, "obesity_rate": 34.2, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2022, "obesity_rate": 33.4, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2023, "obesity_rate": 36.0, "region": "Midwest"}, {"LocationAbbr": "IL", "LocationDesc": "Illinois", "YearStart": 2024, "obesity_rate": 34.2, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2011, "obesity_rate": 30.8, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2012, "obesity_rate": 31.4, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2013, "obesity_rate": 31.8, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2014, "obesity_rate": 32.7, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2015, "obesity_rate": 31.3, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2016, "obesity_rate": 32.5, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2017, "obesity_rate": 33.6, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2018, "obesity_rate": 34.1, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2019, "obesity_rate": 35.3, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2020, "obesity_rate": 36.8, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2021, "obesity_rate": 36.3, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2022, "obesity_rate": 37.7, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2023, "obesity_rate": 37.8, "region": "Midwest"}, {"LocationAbbr": "IN", "LocationDesc": "Indiana", "YearStart": 2024, "obesity_rate": 38.4, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2011, "obesity_rate": 29.0, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2012, "obesity_rate": 30.4, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2013, "obesity_rate": 31.3, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2014, "obesity_rate": 30.9, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2015, "obesity_rate": 32.1, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2016, "obesity_rate": 32.0, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2017, "obesity_rate": 36.4, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2018, "obesity_rate": 35.3, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2019, "obesity_rate": 33.9, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2020, "obesity_rate": 36.5, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2021, "obesity_rate": 36.4, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2022, "obesity_rate": 37.4, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2023, "obesity_rate": 37.8, "region": "Midwest"}, {"LocationAbbr": "IA", "LocationDesc": "Iowa", "YearStart": 2024, "obesity_rate": 36.6, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2011, "obesity_rate": 29.6, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2012, "obesity_rate": 29.8, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2013, "obesity_rate": 30.0, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2014, "obesity_rate": 31.3, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2015, "obesity_rate": 34.2, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2016, "obesity_rate": 31.2, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2017, "obesity_rate": 32.4, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2018, "obesity_rate": 34.4, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2019, "obesity_rate": 35.2, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2020, "obesity_rate": 35.3, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2021, "obesity_rate": 36.0, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2022, "obesity_rate": 35.7, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2023, "obesity_rate": 35.9, "region": "Midwest"}, {"LocationAbbr": "KS", "LocationDesc": "Kansas", "YearStart": 2024, "obesity_rate": 37.6, "region": "Midwest"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2011, "obesity_rate": 30.4, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2012, "obesity_rate": 31.3, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2013, "obesity_rate": 33.2, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2014, "obesity_rate": 31.6, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2015, "obesity_rate": 34.6, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2016, "obesity_rate": 34.2, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2017, "obesity_rate": 34.3, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2018, "obesity_rate": 36.6, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2019, "obesity_rate": 36.5, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2020, "obesity_rate": 36.6, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2021, "obesity_rate": 40.3, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2022, "obesity_rate": 37.7, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2023, "obesity_rate": 37.45, "region": "South"}, {"LocationAbbr": "KY", "LocationDesc": "Kentucky", "YearStart": 2024, "obesity_rate": 37.2, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2011, "obesity_rate": 33.4, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2012, "obesity_rate": 34.7, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2013, "obesity_rate": 33.1, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2014, "obesity_rate": 34.9, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2015, "obesity_rate": 36.2, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2016, "obesity_rate": 35.5, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2017, "obesity_rate": 36.2, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2018, "obesity_rate": 36.8, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2019, "obesity_rate": 35.9, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2020, "obesity_rate": 38.1, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2021, "obesity_rate": 38.6, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2022, "obesity_rate": 40.1, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2023, "obesity_rate": 39.9, "region": "South"}, {"LocationAbbr": "LA", "LocationDesc": "Louisiana", "YearStart": 2024, "obesity_rate": 39.2, "region": "South"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2011, "obesity_rate": 27.8, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2012, "obesity_rate": 28.3, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2013, "obesity_rate": 28.9, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2014, "obesity_rate": 28.2, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2015, "obesity_rate": 30.0, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2016, "obesity_rate": 29.9, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2017, "obesity_rate": 29.1, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2018, "obesity_rate": 30.4, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2019, "obesity_rate": 31.7, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2020, "obesity_rate": 31.0, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2021, "obesity_rate": 31.9, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2022, "obesity_rate": 33.1, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2023, "obesity_rate": 32.6, "region": "Northeast"}, {"LocationAbbr": "ME", "LocationDesc": "Maine", "YearStart": 2024, "obesity_rate": 33.2, "region": "Northeast"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2011, "obesity_rate": 28.3, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2012, "obesity_rate": 27.6, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2013, "obesity_rate": 28.3, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2014, "obesity_rate": 29.6, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2015, "obesity_rate": 28.9, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2016, "obesity_rate": 29.9, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2017, "obesity_rate": 31.3, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2018, "obesity_rate": 30.9, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2019, "obesity_rate": 32.3, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2020, "obesity_rate": 31.0, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2021, "obesity_rate": 34.3, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2022, "obesity_rate": 33.2, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2023, "obesity_rate": 34.1, "region": "South"}, {"LocationAbbr": "MD", "LocationDesc": "Maryland", "YearStart": 2024, "obesity_rate": 32.7, "region": "South"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2011, "obesity_rate": 22.7, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2012, "obesity_rate": 22.9, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2013, "obesity_rate": 23.6, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2014, "obesity_rate": 23.3, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2015, "obesity_rate": 24.3, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2016, "obesity_rate": 23.6, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2017, "obesity_rate": 25.9, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2018, "obesity_rate": 25.7, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2019, "obesity_rate": 25.2, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2020, "obesity_rate": 24.4, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2021, "obesity_rate": 27.4, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2022, "obesity_rate": 27.2, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2023, "obesity_rate": 27.4, "region": "Northeast"}, {"LocationAbbr": "MA", "LocationDesc": "Massachusetts", "YearStart": 2024, "obesity_rate": 27.0, "region": "Northeast"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2011, "obesity_rate": 31.3, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2012, "obesity_rate": 31.1, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2013, "obesity_rate": 31.5, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2014, "obesity_rate": 30.7, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2015, "obesity_rate": 31.2, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2016, "obesity_rate": 32.5, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2017, "obesity_rate": 32.3, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2018, "obesity_rate": 33.0, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2019, "obesity_rate": 36.0, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2020, "obesity_rate": 35.2, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2021, "obesity_rate": 34.4, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2022, "obesity_rate": 34.5, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2023, "obesity_rate": 35.4, "region": "Midwest"}, {"LocationAbbr": "MI", "LocationDesc": "Michigan", "YearStart": 2024, "obesity_rate": 36.1, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2011, "obesity_rate": 25.7, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2012, "obesity_rate": 25.7, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2013, "obesity_rate": 25.5, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2014, "obesity_rate": 27.6, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2015, "obesity_rate": 26.1, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2016, "obesity_rate": 27.8, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2017, "obesity_rate": 28.4, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2018, "obesity_rate": 30.1, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2019, "obesity_rate": 30.1, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2020, "obesity_rate": 30.7, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2021, "obesity_rate": 32.4, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2022, "obesity_rate": 33.6, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2023, "obesity_rate": 33.3, "region": "Midwest"}, {"LocationAbbr": "MN", "LocationDesc": "Minnesota", "YearStart": 2024, "obesity_rate": 32.3, "region": "Midwest"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2011, "obesity_rate": 34.9, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2012, "obesity_rate": 34.6, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2013, "obesity_rate": 35.1, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2014, "obesity_rate": 35.5, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2015, "obesity_rate": 35.6, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2016, "obesity_rate": 37.3, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2017, "obesity_rate": 37.3, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2018, "obesity_rate": 39.5, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2019, "obesity_rate": 40.8, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2020, "obesity_rate": 39.7, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2021, "obesity_rate": 39.1, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2022, "obesity_rate": 39.5, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2023, "obesity_rate": 40.1, "region": "South"}, {"LocationAbbr": "MS", "LocationDesc": "Mississippi", "YearStart": 2024, "obesity_rate": 40.4, "region": "South"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2011, "obesity_rate": 30.3, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2012, "obesity_rate": 29.6, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2013, "obesity_rate": 30.4, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2014, "obesity_rate": 30.2, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2015, "obesity_rate": 32.4, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2016, "obesity_rate": 31.7, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2017, "obesity_rate": 32.5, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2018, "obesity_rate": 35.0, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2019, "obesity_rate": 34.8, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2020, "obesity_rate": 34.0, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2021, "obesity_rate": 37.3, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2022, "obesity_rate": 36.4, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2023, "obesity_rate": 35.3, "region": "Midwest"}, {"LocationAbbr": "MO", "LocationDesc": "Missouri", "YearStart": 2024, "obesity_rate": 34.6, "region": "Midwest"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2011, "obesity_rate": 24.6, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2012, "obesity_rate": 24.3, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2013, "obesity_rate": 24.6, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2014, "obesity_rate": 26.4, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2015, "obesity_rate": 23.6, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2016, "obesity_rate": 25.5, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2017, "obesity_rate": 25.3, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2018, "obesity_rate": 26.9, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2019, "obesity_rate": 28.3, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2020, "obesity_rate": 28.5, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2021, "obesity_rate": 31.8, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2022, "obesity_rate": 30.5, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2023, "obesity_rate": 30.5, "region": "West"}, {"LocationAbbr": "MT", "LocationDesc": "Montana", "YearStart": 2024, "obesity_rate": 31.0, "region": "West"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2011, "obesity_rate": 28.4, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2012, "obesity_rate": 28.6, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2013, "obesity_rate": 29.6, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2014, "obesity_rate": 30.2, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2015, "obesity_rate": 31.4, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2016, "obesity_rate": 32.0, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2017, "obesity_rate": 32.8, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2018, "obesity_rate": 34.1, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2019, "obesity_rate": 34.1, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2020, "obesity_rate": 34.0, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2021, "obesity_rate": 35.9, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2022, "obesity_rate": 35.3, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2023, "obesity_rate": 36.6, "region": "Midwest"}, {"LocationAbbr": "NE", "LocationDesc": "Nebraska", "YearStart": 2024, "obesity_rate": 37.6, "region": "Midwest"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2011, "obesity_rate": 24.5, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2012, "obesity_rate": 26.2, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2013, "obesity_rate": 26.2, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2014, "obesity_rate": 27.7, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2015, "obesity_rate": 26.7, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2016, "obesity_rate": 25.8, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2017, "obesity_rate": 26.7, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2018, "obesity_rate": 29.5, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2019, "obesity_rate": 30.6, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2020, "obesity_rate": 28.7, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2021, "obesity_rate": 31.3, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2022, "obesity_rate": 33.5, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2023, "obesity_rate": 30.8, "region": "West"}, {"LocationAbbr": "NV", "LocationDesc": "Nevada", "YearStart": 2024, "obesity_rate": 34.2, "region": "West"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2011, "obesity_rate": 26.2, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2012, "obesity_rate": 27.3, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2013, "obesity_rate": 26.7, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2014, "obesity_rate": 27.4, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2015, "obesity_rate": 26.3, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2016, "obesity_rate": 26.6, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2017, "obesity_rate": 28.1, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2018, "obesity_rate": 29.6, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2019, "obesity_rate": 31.8, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2020, "obesity_rate": 29.9, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2021, "obesity_rate": 30.6, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2022, "obesity_rate": 30.2, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2023, "obesity_rate": 32.8, "region": "Northeast"}, {"LocationAbbr": "NH", "LocationDesc": "New Hampshire", "YearStart": 2024, "obesity_rate": 31.1, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2011, "obesity_rate": 23.7, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2012, "obesity_rate": 24.6, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2013, "obesity_rate": 26.3, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2014, "obesity_rate": 26.9, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2015, "obesity_rate": 25.6, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2016, "obesity_rate": 27.4, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2017, "obesity_rate": 27.3, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2018, "obesity_rate": 25.7, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2019, "obesity_rate": 26.7, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2020, "obesity_rate": 27.7, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2021, "obesity_rate": 28.2, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2022, "obesity_rate": 29.1, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2023, "obesity_rate": 28.9, "region": "Northeast"}, {"LocationAbbr": "NJ", "LocationDesc": "New Jersey", "YearStart": 2024, "obesity_rate": 27.7, "region": "Northeast"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2011, "obesity_rate": 26.3, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2012, "obesity_rate": 27.1, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2013, "obesity_rate": 26.4, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2014, "obesity_rate": 28.4, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2015, "obesity_rate": 28.8, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2016, "obesity_rate": 28.3, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2017, "obesity_rate": 28.4, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2018, "obesity_rate": 32.3, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2019, "obesity_rate": 31.7, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2020, "obesity_rate": 30.9, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2021, "obesity_rate": 34.6, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2022, "obesity_rate": 32.4, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2023, "obesity_rate": 35.3, "region": "West"}, {"LocationAbbr": "NM", "LocationDesc": "New Mexico", "YearStart": 2024, "obesity_rate": 34.5, "region": "West"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2011, "obesity_rate": 24.5, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2012, "obesity_rate": 23.6, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2013, "obesity_rate": 25.4, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2014, "obesity_rate": 27.0, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2015, "obesity_rate": 25.0, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2016, "obesity_rate": 25.5, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2017, "obesity_rate": 25.7, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2018, "obesity_rate": 27.6, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2019, "obesity_rate": 27.1, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2020, "obesity_rate": 26.3, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2021, "obesity_rate": 29.1, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2022, "obesity_rate": 30.1, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2023, "obesity_rate": 28.0, "region": "Northeast"}, {"LocationAbbr": "NY", "LocationDesc": "New York", "YearStart": 2024, "obesity_rate": 29.5, "region": "Northeast"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2011, "obesity_rate": 29.1, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2012, "obesity_rate": 29.6, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2013, "obesity_rate": 29.4, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2014, "obesity_rate": 29.7, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2015, "obesity_rate": 30.1, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2016, "obesity_rate": 31.8, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2017, "obesity_rate": 32.1, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2018, "obesity_rate": 33.0, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2019, "obesity_rate": 34.0, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2020, "obesity_rate": 33.6, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2021, "obesity_rate": 36.0, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2022, "obesity_rate": 34.1, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2023, "obesity_rate": 34.0, "region": "South"}, {"LocationAbbr": "NC", "LocationDesc": "North Carolina", "YearStart": 2024, "obesity_rate": 34.5, "region": "South"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2011, "obesity_rate": 27.8, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2012, "obesity_rate": 29.7, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2013, "obesity_rate": 31.0, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2014, "obesity_rate": 32.2, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2015, "obesity_rate": 31.0, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2016, "obesity_rate": 31.9, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2017, "obesity_rate": 33.2, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2018, "obesity_rate": 35.1, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2019, "obesity_rate": 34.8, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2020, "obesity_rate": 33.1, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2021, "obesity_rate": 35.2, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2022, "obesity_rate": 35.4, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2023, "obesity_rate": 35.6, "region": "Midwest"}, {"LocationAbbr": "ND", "LocationDesc": "North Dakota", "YearStart": 2024, "obesity_rate": 36.8, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2011, "obesity_rate": 29.6, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2012, "obesity_rate": 30.1, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2013, "obesity_rate": 30.4, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2014, "obesity_rate": 32.6, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2015, "obesity_rate": 29.8, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2016, "obesity_rate": 31.5, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2017, "obesity_rate": 33.8, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2018, "obesity_rate": 34.0, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2019, "obesity_rate": 34.8, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2020, "obesity_rate": 35.5, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2021, "obesity_rate": 37.8, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2022, "obesity_rate": 38.1, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2023, "obesity_rate": 36.4, "region": "Midwest"}, {"LocationAbbr": "OH", "LocationDesc": "Ohio", "YearStart": 2024, "obesity_rate": 36.9, "region": "Midwest"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2011, "obesity_rate": 31.1, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2012, "obesity_rate": 32.2, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2013, "obesity_rate": 32.5, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2014, "obesity_rate": 33.0, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2015, "obesity_rate": 33.9, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2016, "obesity_rate": 32.8, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2017, "obesity_rate": 36.5, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2018, "obesity_rate": 34.8, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2019, "obesity_rate": 36.8, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2020, "obesity_rate": 36.4, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2021, "obesity_rate": 39.4, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2022, "obesity_rate": 40.0, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2023, "obesity_rate": 38.7, "region": "South"}, {"LocationAbbr": "OK", "LocationDesc": "Oklahoma", "YearStart": 2024, "obesity_rate": 36.8, "region": "South"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2011, "obesity_rate": 26.7, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2012, "obesity_rate": 27.3, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2013, "obesity_rate": 26.5, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2014, "obesity_rate": 27.9, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2015, "obesity_rate": 30.1, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2016, "obesity_rate": 28.7, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2017, "obesity_rate": 29.4, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2018, "obesity_rate": 29.9, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2019, "obesity_rate": 29.0, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2020, "obesity_rate": 28.1, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2021, "obesity_rate": 30.4, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2022, "obesity_rate": 30.9, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2023, "obesity_rate": 33.6, "region": "West"}, {"LocationAbbr": "OR", "LocationDesc": "Oregon", "YearStart": 2024, "obesity_rate": 33.5, "region": "West"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2011, "obesity_rate": 28.6, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2012, "obesity_rate": 29.1, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2013, "obesity_rate": 30.0, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2014, "obesity_rate": 30.2, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2015, "obesity_rate": 30.0, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2016, "obesity_rate": 30.3, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2017, "obesity_rate": 31.6, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2018, "obesity_rate": 30.9, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2019, "obesity_rate": 33.2, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2020, "obesity_rate": 31.5, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2021, "obesity_rate": 33.3, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2022, "obesity_rate": 33.4, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2023, "obesity_rate": 33.8, "region": "Northeast"}, {"LocationAbbr": "PA", "LocationDesc": "Pennsylvania", "YearStart": 2024, "obesity_rate": 34.2, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2011, "obesity_rate": 25.4, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2012, "obesity_rate": 25.7, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2013, "obesity_rate": 27.3, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2014, "obesity_rate": 27.0, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2015, "obesity_rate": 26.0, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2016, "obesity_rate": 26.6, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2017, "obesity_rate": 30.0, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2018, "obesity_rate": 27.7, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2019, "obesity_rate": 30.0, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2020, "obesity_rate": 30.1, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2021, "obesity_rate": 30.1, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2022, "obesity_rate": 30.8, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2023, "obesity_rate": 31.6, "region": "Northeast"}, {"LocationAbbr": "RI", "LocationDesc": "Rhode Island", "YearStart": 2024, "obesity_rate": 31.1, "region": "Northeast"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2011, "obesity_rate": 30.8, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2012, "obesity_rate": 31.6, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2013, "obesity_rate": 31.7, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2014, "obesity_rate": 32.1, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2015, "obesity_rate": 31.7, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2016, "obesity_rate": 32.3, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2017, "obesity_rate": 34.1, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2018, "obesity_rate": 34.3, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2019, "obesity_rate": 35.4, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2020, "obesity_rate": 36.2, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2021, "obesity_rate": 36.1, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2022, "obesity_rate": 35.0, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2023, "obesity_rate": 36.0, "region": "South"}, {"LocationAbbr": "SC", "LocationDesc": "South Carolina", "YearStart": 2024, "obesity_rate": 34.6, "region": "South"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2011, "obesity_rate": 28.1, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2012, "obesity_rate": 28.1, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2013, "obesity_rate": 29.9, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2014, "obesity_rate": 29.8, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2015, "obesity_rate": 30.4, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2016, "obesity_rate": 29.6, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2017, "obesity_rate": 31.9, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2018, "obesity_rate": 30.1, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2019, "obesity_rate": 33.0, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2020, "obesity_rate": 33.2, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2021, "obesity_rate": 38.4, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2022, "obesity_rate": 36.8, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2023, "obesity_rate": 36.0, "region": "Midwest"}, {"LocationAbbr": "SD", "LocationDesc": "South Dakota", "YearStart": 2024, "obesity_rate": 37.0, "region": "Midwest"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2011, "obesity_rate": 29.2, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2012, "obesity_rate": 31.1, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2013, "obesity_rate": 33.7, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2014, "obesity_rate": 31.2, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2015, "obesity_rate": 33.8, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2016, "obesity_rate": 34.8, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2017, "obesity_rate": 32.8, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2018, "obesity_rate": 34.4, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2019, "obesity_rate": 36.5, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2020, "obesity_rate": 35.6, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2021, "obesity_rate": 35.0, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2022, "obesity_rate": 38.9, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2023, "obesity_rate": 37.6, "region": "South"}, {"LocationAbbr": "TN", "LocationDesc": "Tennessee", "YearStart": 2024, "obesity_rate": 37.6, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2011, "obesity_rate": 30.4, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2012, "obesity_rate": 29.2, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2013, "obesity_rate": 30.9, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2014, "obesity_rate": 31.9, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2015, "obesity_rate": 32.4, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2016, "obesity_rate": 33.7, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2017, "obesity_rate": 33.0, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2018, "obesity_rate": 34.8, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2019, "obesity_rate": 34.0, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2020, "obesity_rate": 35.8, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2021, "obesity_rate": 36.1, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2022, "obesity_rate": 35.5, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2023, "obesity_rate": 34.4, "region": "South"}, {"LocationAbbr": "TX", "LocationDesc": "Texas", "YearStart": 2024, "obesity_rate": 35.6, "region": "South"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2011, "obesity_rate": 24.4, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2012, "obesity_rate": 24.3, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2013, "obesity_rate": 24.1, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2014, "obesity_rate": 25.7, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2015, "obesity_rate": 24.5, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2016, "obesity_rate": 25.4, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2017, "obesity_rate": 25.3, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2018, "obesity_rate": 27.8, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2019, "obesity_rate": 29.2, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2020, "obesity_rate": 28.6, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2021, "obesity_rate": 30.9, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2022, "obesity_rate": 31.1, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2023, "obesity_rate": 30.2, "region": "West"}, {"LocationAbbr": "UT", "LocationDesc": "Utah", "YearStart": 2024, "obesity_rate": 31.0, "region": "West"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2011, "obesity_rate": 25.4, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2012, "obesity_rate": 23.7, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2013, "obesity_rate": 24.7, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2014, "obesity_rate": 24.8, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2015, "obesity_rate": 25.1, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2016, "obesity_rate": 27.1, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2017, "obesity_rate": 27.6, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2018, "obesity_rate": 27.5, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2019, "obesity_rate": 26.6, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2020, "obesity_rate": 26.3, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2021, "obesity_rate": 29.0, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2022, "obesity_rate": 26.8, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2023, "obesity_rate": 28.8, "region": "Northeast"}, {"LocationAbbr": "VT", "LocationDesc": "Vermont", "YearStart": 2024, "obesity_rate": 29.0, "region": "Northeast"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2011, "obesity_rate": 29.2, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2012, "obesity_rate": 27.4, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2013, "obesity_rate": 27.2, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2014, "obesity_rate": 28.5, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2015, "obesity_rate": 29.2, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2016, "obesity_rate": 29.0, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2017, "obesity_rate": 30.1, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2018, "obesity_rate": 30.4, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2019, "obesity_rate": 31.9, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2020, "obesity_rate": 32.2, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2021, "obesity_rate": 34.2, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2022, "obesity_rate": 35.2, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2023, "obesity_rate": 34.3, "region": "South"}, {"LocationAbbr": "VA", "LocationDesc": "Virginia", "YearStart": 2024, "obesity_rate": 32.3, "region": "South"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2011, "obesity_rate": 26.5, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2012, "obesity_rate": 26.8, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2013, "obesity_rate": 27.2, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2014, "obesity_rate": 27.3, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2015, "obesity_rate": 26.4, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2016, "obesity_rate": 28.6, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2017, "obesity_rate": 27.7, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2018, "obesity_rate": 28.7, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2019, "obesity_rate": 28.3, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2020, "obesity_rate": 28.0, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2021, "obesity_rate": 28.8, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2022, "obesity_rate": 31.7, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2023, "obesity_rate": 30.6, "region": "West"}, {"LocationAbbr": "WA", "LocationDesc": "Washington", "YearStart": 2024, "obesity_rate": 31.5, "region": "West"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2011, "obesity_rate": 32.4, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2012, "obesity_rate": 33.8, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2013, "obesity_rate": 35.1, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2014, "obesity_rate": 35.7, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2015, "obesity_rate": 35.6, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2016, "obesity_rate": 37.7, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2017, "obesity_rate": 38.1, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2018, "obesity_rate": 39.5, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2019, "obesity_rate": 39.7, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2020, "obesity_rate": 39.1, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2021, "obesity_rate": 40.6, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2022, "obesity_rate": 41.0, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2023, "obesity_rate": 41.2, "region": "South"}, {"LocationAbbr": "WV", "LocationDesc": "West Virginia", "YearStart": 2024, "obesity_rate": 41.4, "region": "South"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2011, "obesity_rate": 27.7, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2012, "obesity_rate": 29.7, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2013, "obesity_rate": 29.8, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2014, "obesity_rate": 31.2, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2015, "obesity_rate": 30.7, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2016, "obesity_rate": 30.7, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2017, "obesity_rate": 32.0, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2018, "obesity_rate": 32.0, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2019, "obesity_rate": 34.2, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2020, "obesity_rate": 32.3, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2021, "obesity_rate": 33.9, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2022, "obesity_rate": 37.7, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2023, "obesity_rate": 35.9, "region": "Midwest"}, {"LocationAbbr": "WI", "LocationDesc": "Wisconsin", "YearStart": 2024, "obesity_rate": 37.4, "region": "Midwest"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2011, "obesity_rate": 25.0, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2012, "obesity_rate": 24.6, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2013, "obesity_rate": 27.8, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2014, "obesity_rate": 29.5, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2015, "obesity_rate": 29.0, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2016, "obesity_rate": 27.7, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2017, "obesity_rate": 28.8, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2018, "obesity_rate": 29.0, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2019, "obesity_rate": 29.7, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2020, "obesity_rate": 30.7, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2021, "obesity_rate": 32.0, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2022, "obesity_rate": 34.3, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2023, "obesity_rate": 33.3, "region": "West"}, {"LocationAbbr": "WY", "LocationDesc": "Wyoming", "YearStart": 2024, "obesity_rate": 32.5, "region": "West"}],
+  trend: { regional: [{"YearStart": 2011, "region": "Midwest", "obesity_rate": 28.78333333333333}, {"YearStart": 2011, "region": "Northeast", "obesity_rate": 25.422222222222224}, {"YearStart": 2011, "region": "South", "obesity_rate": 29.95294117647059}, {"YearStart": 2011, "region": "West", "obesity_rate": 24.907692307692308}, {"YearStart": 2012, "region": "Midwest", "obesity_rate": 29.358333333333334}, {"YearStart": 2012, "region": "Northeast", "obesity_rate": 25.644444444444446}, {"YearStart": 2012, "region": "South", "obesity_rate": 30.21764705882353}, {"YearStart": 2012, "region": "West", "obesity_rate": 25.246153846153845}, {"YearStart": 2013, "region": "Midwest", "obesity_rate": 30.05}, {"YearStart": 2013, "region": "Northeast", "obesity_rate": 26.433333333333334}, {"YearStart": 2013, "region": "South", "obesity_rate": 31.052941176470586}, {"YearStart": 2013, "region": "West", "obesity_rate": 25.753846153846155}, {"YearStart": 2014, "region": "Midwest", "obesity_rate": 30.724999999999998}, {"YearStart": 2014, "region": "Northeast", "obesity_rate": 26.788888888888888}, {"YearStart": 2014, "region": "South", "obesity_rate": 31.30588235294118}, {"YearStart": 2014, "region": "West", "obesity_rate": 26.807692307692307}, {"YearStart": 2015, "region": "Midwest", "obesity_rate": 30.95}, {"YearStart": 2015, "region": "Northeast", "obesity_rate": 26.4}, {"YearStart": 2015, "region": "South", "obesity_rate": 31.84705882352941}, {"YearStart": 2015, "region": "West", "obesity_rate": 26.384615384615383}, {"YearStart": 2016, "region": "Midwest", "obesity_rate": 31.25}, {"YearStart": 2016, "region": "Northeast", "obesity_rate": 27.0}, {"YearStart": 2016, "region": "South", "obesity_rate": 32.5}, {"YearStart": 2016, "region": "West", "obesity_rate": 26.838461538461537}, {"YearStart": 2017, "region": "Midwest", "obesity_rate": 32.53333333333333}, {"YearStart": 2017, "region": "Northeast", "obesity_rate": 28.022222222222222}, {"YearStart": 2017, "region": "South", "obesity_rate": 33.05294117647059}, {"YearStart": 2017, "region": "West", "obesity_rate": 27.392307692307693}, {"YearStart": 2018, "region": "Midwest", "obesity_rate": 33.25}, {"YearStart": 2018, "region": "Northeast", "obesity_rate": 28.055555555555557}, {"YearStart": 2018, "region": "South", "obesity_rate": 34.1}, {"YearStart": 2018, "region": "West", "obesity_rate": 28.092307692307692}, {"YearStart": 2019, "region": "Midwest", "obesity_rate": 33.983333333333334}, {"YearStart": 2019, "region": "Northeast", "obesity_rate": 29.04444444444444}, {"YearStart": 2019, "region": "South", "obesity_rate": 34.44705882352941}, {"YearStart": 2019, "region": "West", "obesity_rate": 28.707692307692305}, {"YearStart": 2020, "region": "Midwest", "obesity_rate": 34.083333333333336}, {"YearStart": 2020, "region": "Northeast", "obesity_rate": 28.488888888888887}, {"YearStart": 2020, "region": "South", "obesity_rate": 34.89411764705883}, {"YearStart": 2020, "region": "West", "obesity_rate": 28.95384615384615}, {"YearStart": 2021, "region": "Midwest", "obesity_rate": 35.68333333333333}, {"YearStart": 2021, "region": "Northeast", "obesity_rate": 30.0}, {"YearStart": 2021, "region": "South", "obesity_rate": 35.92941176470588}, {"YearStart": 2021, "region": "West", "obesity_rate": 30.300000000000004}, {"YearStart": 2022, "region": "Midwest", "obesity_rate": 36.0}, {"YearStart": 2022, "region": "Northeast", "obesity_rate": 30.144444444444446}, {"YearStart": 2022, "region": "South", "obesity_rate": 36.2764705882353}, {"YearStart": 2022, "region": "West", "obesity_rate": 30.915384615384614}, {"YearStart": 2023, "region": "Midwest", "obesity_rate": 36.0}, {"YearStart": 2023, "region": "Northeast", "obesity_rate": 30.366666666666667}, {"YearStart": 2023, "region": "South", "obesity_rate": 35.955882352941174}, {"YearStart": 2023, "region": "West", "obesity_rate": 30.853846153846156}, {"YearStart": 2024, "region": "Midwest", "obesity_rate": 36.291666666666664}, {"YearStart": 2024, "region": "Northeast", "obesity_rate": 30.533333333333335}, {"YearStart": 2024, "region": "South", "obesity_rate": 35.71764705882353}, {"YearStart": 2024, "region": "West", "obesity_rate": 31.484615384615385}], national: [{"YearStart": 2011, "obesity_rate": 27.5921568627451}, {"YearStart": 2012, "obesity_rate": 27.941176470588236}, {"YearStart": 2013, "obesity_rate": 28.650980392156864}, {"YearStart": 2014, "obesity_rate": 29.225490196078432}, {"YearStart": 2015, "obesity_rate": 29.282352941176473}, {"YearStart": 2016, "obesity_rate": 29.7921568627451}, {"YearStart": 2017, "obesity_rate": 30.599999999999998}, {"YearStart": 2018, "obesity_rate": 31.301960784313728}, {"YearStart": 2019, "obesity_rate": 31.92156862745098}, {"YearStart": 2020, "obesity_rate": 32.05882352941177}, {"YearStart": 2021, "obesity_rate": 33.39019607843137}, {"YearStart": 2022, "obesity_rate": 33.76274509803922}, {"YearStart": 2023, "obesity_rate": 33.67941176470588}, {"YearStart": 2024, "obesity_rate": 33.858823529411765}] },
+  scatter: { points: [{"active": 72.4, "obesity_rate": 38.9, "region": "South", "LocationAbbr": "AL", "LocationDesc": "Alabama"}, {"active": 81.9, "obesity_rate": 34.0, "region": "West", "LocationAbbr": "AK", "LocationDesc": "Alaska"}, {"active": 78.2, "obesity_rate": 33.3, "region": "West", "LocationAbbr": "AZ", "LocationDesc": "Arizona"}, {"active": 71.5, "obesity_rate": 38.9, "region": "South", "LocationAbbr": "AR", "LocationDesc": "Arkansas"}, {"active": 79.3, "obesity_rate": 29.1, "region": "West", "LocationAbbr": "CA", "LocationDesc": "California"}, {"active": 84.4, "obesity_rate": 25.0, "region": "West", "LocationAbbr": "CO", "LocationDesc": "Colorado"}, {"active": 79.2, "obesity_rate": 32.0, "region": "Northeast", "LocationAbbr": "CT", "LocationDesc": "Connecticut"}, {"active": 74.8, "obesity_rate": 36.6, "region": "South", "LocationAbbr": "DE", "LocationDesc": "Delaware"}, {"active": 86.1, "obesity_rate": 25.5, "region": "South", "LocationAbbr": "DC", "LocationDesc": "District of Columbia"}, {"active": 75.0, "obesity_rate": 29.6, "region": "South", "LocationAbbr": "FL", "LocationDesc": "Florida"}, {"active": 77.0, "obesity_rate": 35.4, "region": "South", "LocationAbbr": "GA", "LocationDesc": "Georgia"}, {"active": 78.7, "obesity_rate": 27.0, "region": "West", "LocationAbbr": "HI", "LocationDesc": "Hawaii"}, {"active": 79.3, "obesity_rate": 32.7, "region": "West", "LocationAbbr": "ID", "LocationDesc": "Idaho"}, {"active": 76.7, "obesity_rate": 34.2, "region": "Midwest", "LocationAbbr": "IL", "LocationDesc": "Illinois"}, {"active": 75.4, "obesity_rate": 38.4, "region": "Midwest", "LocationAbbr": "IN", "LocationDesc": "Indiana"}, {"active": 78.2, "obesity_rate": 36.6, "region": "Midwest", "LocationAbbr": "IA", "LocationDesc": "Iowa"}, {"active": 77.6, "obesity_rate": 37.6, "region": "Midwest", "LocationAbbr": "KS", "LocationDesc": "Kansas"}, {"active": 72.0, "obesity_rate": 37.2, "region": "South", "LocationAbbr": "KY", "LocationDesc": "Kentucky"}, {"active": 72.4, "obesity_rate": 39.2, "region": "South", "LocationAbbr": "LA", "LocationDesc": "Louisiana"}, {"active": 78.6, "obesity_rate": 33.2, "region": "Northeast", "LocationAbbr": "ME", "LocationDesc": "Maine"}, {"active": 80.5, "obesity_rate": 32.7, "region": "South", "LocationAbbr": "MD", "LocationDesc": "Maryland"}, {"active": 81.2, "obesity_rate": 27.0, "region": "Northeast", "LocationAbbr": "MA", "LocationDesc": "Massachusetts"}, {"active": 78.0, "obesity_rate": 36.1, "region": "Midwest", "LocationAbbr": "MI", "LocationDesc": "Michigan"}, {"active": 82.5, "obesity_rate": 32.3, "region": "Midwest", "LocationAbbr": "MN", "LocationDesc": "Minnesota"}, {"active": 69.4, "obesity_rate": 40.4, "region": "South", "LocationAbbr": "MS", "LocationDesc": "Mississippi"}, {"active": 75.4, "obesity_rate": 34.6, "region": "Midwest", "LocationAbbr": "MO", "LocationDesc": "Missouri"}, {"active": 80.9, "obesity_rate": 31.0, "region": "West", "LocationAbbr": "MT", "LocationDesc": "Montana"}, {"active": 78.4, "obesity_rate": 37.6, "region": "Midwest", "LocationAbbr": "NE", "LocationDesc": "Nebraska"}, {"active": 76.8, "obesity_rate": 34.2, "region": "West", "LocationAbbr": "NV", "LocationDesc": "Nevada"}, {"active": 81.4, "obesity_rate": 31.1, "region": "Northeast", "LocationAbbr": "NH", "LocationDesc": "New Hampshire"}, {"active": 77.2, "obesity_rate": 27.7, "region": "Northeast", "LocationAbbr": "NJ", "LocationDesc": "New Jersey"}, {"active": 78.3, "obesity_rate": 34.5, "region": "West", "LocationAbbr": "NM", "LocationDesc": "New Mexico"}, {"active": 76.0, "obesity_rate": 29.5, "region": "Northeast", "LocationAbbr": "NY", "LocationDesc": "New York"}, {"active": 79.8, "obesity_rate": 34.5, "region": "South", "LocationAbbr": "NC", "LocationDesc": "North Carolina"}, {"active": 78.3, "obesity_rate": 36.8, "region": "Midwest", "LocationAbbr": "ND", "LocationDesc": "North Dakota"}, {"active": 77.8, "obesity_rate": 36.9, "region": "Midwest", "LocationAbbr": "OH", "LocationDesc": "Ohio"}, {"active": 72.3, "obesity_rate": 36.8, "region": "South", "LocationAbbr": "OK", "LocationDesc": "Oklahoma"}, {"active": 81.0, "obesity_rate": 33.5, "region": "West", "LocationAbbr": "OR", "LocationDesc": "Oregon"}, {"active": 77.3, "obesity_rate": 34.2, "region": "Northeast", "LocationAbbr": "PA", "LocationDesc": "Pennsylvania"}, {"active": 77.1, "obesity_rate": 31.1, "region": "Northeast", "LocationAbbr": "RI", "LocationDesc": "Rhode Island"}, {"active": 78.3, "obesity_rate": 34.6, "region": "South", "LocationAbbr": "SC", "LocationDesc": "South Carolina"}, {"active": 78.6, "obesity_rate": 37.0, "region": "Midwest", "LocationAbbr": "SD", "LocationDesc": "South Dakota"}, {"active": 74.0, "obesity_rate": 37.6, "region": "South", "LocationAbbr": "TN", "LocationDesc": "Tennessee"}, {"active": 74.9, "obesity_rate": 35.6, "region": "South", "LocationAbbr": "TX", "LocationDesc": "Texas"}, {"active": 83.2, "obesity_rate": 31.0, "region": "West", "LocationAbbr": "UT", "LocationDesc": "Utah"}, {"active": 84.0, "obesity_rate": 29.0, "region": "Northeast", "LocationAbbr": "VT", "LocationDesc": "Vermont"}, {"active": 78.1, "obesity_rate": 32.3, "region": "South", "LocationAbbr": "VA", "LocationDesc": "Virginia"}, {"active": 82.6, "obesity_rate": 31.5, "region": "West", "LocationAbbr": "WA", "LocationDesc": "Washington"}, {"active": 71.3, "obesity_rate": 41.4, "region": "South", "LocationAbbr": "WV", "LocationDesc": "West Virginia"}, {"active": 78.3, "obesity_rate": 37.4, "region": "Midwest", "LocationAbbr": "WI", "LocationDesc": "Wisconsin"}, {"active": 79.0, "obesity_rate": 32.5, "region": "West", "LocationAbbr": "WY", "LocationDesc": "Wyoming"}], r: -0.71, trend_x: [69.4, 69.56868686868687, 69.73737373737374, 69.9060606060606, 70.07474747474748, 70.24343434343434, 70.41212121212122, 70.58080808080808, 70.74949494949496, 70.91818181818182, 71.0868686868687, 71.25555555555556, 71.42424242424242, 71.5929292929293, 71.76161616161616, 71.93030303030304, 72.0989898989899, 72.26767676767678, 72.43636363636364, 72.60505050505051, 72.77373737373738, 72.94242424242425, 73.11111111111111, 73.27979797979798, 73.44848484848485, 73.61717171717171, 73.78585858585859, 73.95454545454545, 74.12323232323233, 74.29191919191919, 74.46060606060607, 74.62929292929293, 74.7979797979798, 74.96666666666667, 75.13535353535354, 75.3040404040404, 75.47272727272727, 75.64141414141415, 75.81010101010101, 75.97878787878788, 76.14747474747475, 76.31616161616162, 76.48484848484848, 76.65353535353536, 76.82222222222222, 76.9909090909091, 77.15959595959596, 77.32828282828282, 77.4969696969697, 77.66565656565656, 77.83434343434344, 78.0030303030303, 78.17171717171718, 78.34040404040404, 78.50909090909092, 78.67777777777778, 78.84646464646465, 79.01515151515152, 79.18383838383838, 79.35252525252525, 79.52121212121212, 79.68989898989899, 79.85858585858585, 80.02727272727273, 80.1959595959596, 80.36464646464647, 80.53333333333333, 80.70202020202021, 80.87070707070707, 81.03939393939393, 81.20808080808081, 81.37676767676767, 81.54545454545455, 81.71414141414141, 81.88282828282829, 82.05151515151515, 82.22020202020202, 82.38888888888889, 82.55757575757576, 82.72626262626262, 82.89494949494949, 83.06363636363636, 83.23232323232322, 83.4010101010101, 83.56969696969696, 83.73838383838384, 83.9070707070707, 84.07575757575758, 84.24444444444444, 84.41313131313132, 84.58181818181818, 84.75050505050504, 84.91919191919192, 85.08787878787878, 85.25656565656566, 85.42525252525252, 85.5939393939394, 85.76262626262626, 85.93131313131312, 86.1], trend_y: [40.33160480955761, 40.20246396192779, 40.073323114297956, 39.944182266668136, 39.8150414190383, 39.685900571408474, 39.55675972377864, 39.42761887614882, 39.298478028518986, 39.169337180889165, 39.04019633325933, 38.911055485629504, 38.781914637999684, 38.65277379036985, 38.52363294274003, 38.394492095110195, 38.265351247480375, 38.13621039985054, 38.00706955222071, 37.87792870459088, 37.74878785696106, 37.619647009331224, 37.490506161701404, 37.36136531407158, 37.23222446644174, 37.10308361881192, 36.97394277118209, 36.84480192355227, 36.715661075922434, 36.58652022829261, 36.45737938066278, 36.32823853303295, 36.19909768540312, 36.0699568377733, 35.94081599014346, 35.81167514251364, 35.682534294883816, 35.55339344725398, 35.42425259962416, 35.29511175199433, 35.16597090436451, 35.03683005673467, 34.90768920910485, 34.77854836147502, 34.64940751384519, 34.520266666215356, 34.391125818585536, 34.261984970955716, 34.13284412332588, 34.003703275696054, 33.87456242806622, 33.7454215804364, 33.616280732806565, 33.487139885176745, 33.35799903754691, 33.22885818991709, 33.099717342287256, 32.97057649465743, 32.84143564702761, 32.712294799397775, 32.583153951767954, 32.45401310413812, 32.32487225650829, 32.19573140887846, 32.06659056124864, 31.937449713618804, 31.808308865988984, 31.67916801835915, 31.55002717072933, 31.420886323099502, 31.291745475469668, 31.162604627839848, 31.033463780210013, 30.904322932580193, 30.77518208495036, 30.64604123732053, 30.516900389690704, 30.387759542060877, 30.258618694431043, 30.129477846801223, 30.000336999171395, 29.871196151541568, 29.74205530391174, 29.612914456281906, 29.483773608652086, 29.35463276102226, 29.225491913392432, 29.09635106576259, 28.967210218132777, 28.838069370502936, 28.708928522873123, 28.579787675243296, 28.450646827613454, 28.32150597998364, 28.1923651323538, 28.063224284723987, 27.934083437094145, 27.804942589464318, 27.675801741834505, 27.546660894204663] },
+  gap: [{"YearStart": 2011, "low_15k": 32.34313725490196, "high_75k": 23.76078431372549, "gap": 8.58235294117647}, {"YearStart": 2012, "low_15k": 32.71568627450981, "high_75k": 24.42549019607843, "gap": 8.290196078431375}, {"YearStart": 2013, "low_15k": 33.14509803921569, "high_75k": 25.137254901960784, "gap": 8.007843137254905}, {"YearStart": 2014, "low_15k": 34.937254901960785, "high_75k": 25.8, "gap": 9.137254901960784}, {"YearStart": 2015, "low_15k": 35.08627450980392, "high_75k": 25.811764705882354, "gap": 9.274509803921568}, {"YearStart": 2016, "low_15k": 34.80392156862745, "high_75k": 26.554901960784314, "gap": 8.249019607843138}, {"YearStart": 2017, "low_15k": 36.523529411764706, "high_75k": 27.243137254901963, "gap": 9.280392156862742}, {"YearStart": 2018, "low_15k": 36.26470588235294, "high_75k": 28.647058823529413, "gap": 7.617647058823529}, {"YearStart": 2019, "low_15k": 37.152941176470584, "high_75k": 29.59313725490196, "gap": 7.559803921568623}, {"YearStart": 2020, "low_15k": 36.82549019607843, "high_75k": 29.78627450980392, "gap": 7.039215686274506}, {"YearStart": 2021, "low_15k": 39.42254901960784, "high_75k": 33.86078431372549, "gap": 5.561764705882354}, {"YearStart": 2022, "low_15k": 37.64901960784314, "high_75k": 34.85294117647059, "gap": 2.7960784313725497}, {"YearStart": 2023, "low_15k": 38.154901960784315, "high_75k": 34.26470588235294, "gap": 3.890196078431373}, {"YearStart": 2024, "low_15k": 37.535294117647055, "high_75k": 34.79607843137255, "gap": 2.7392156862745054}],
+  corr: { z: [[1.0, -0.47, 0.54, 0.32, 0.77], [-0.47, 1.0, -0.16, 0.02, -0.33], [0.54, -0.16, 1.0, 0.21, 0.54], [0.32, 0.02, 0.21, 1.0, 0.51], [0.77, -0.33, 0.54, 0.51, 1.0]], x: ['Obesity','Overweight','No Activity','Low Veg','Low Fruit'], y: ['Obesity','Overweight','No Activity','Low Veg','Low Fruit'] },
+  atrisk: [{"StratificationCategory1": "Race/Ethnicity", "Stratification1": "NH Hawaiian/Pacific Islander", "mean": 39.1, "n": 74}, {"StratificationCategory1": "Race/Ethnicity", "Stratification1": "Non-Hispanic Black", "mean": 38.2, "n": 643}, {"StratificationCategory1": "Race/Ethnicity", "Stratification1": "NH American Indian/Alaska Native", "mean": 37.1, "n": 608}, {"StratificationCategory1": "Age (years)", "Stratification1": "45 - 54", "mean": 36.8, "n": 714}, {"StratificationCategory1": "Income", "Stratification1": "Less than $15,000", "mean": 35.9, "n": 714}, {"StratificationCategory1": "Age (years)", "Stratification1": "55 - 64", "mean": 35.6, "n": 714}, {"StratificationCategory1": "Education", "Stratification1": "Less than high school", "mean": 34.7, "n": 714}, {"StratificationCategory1": "Income", "Stratification1": "$15,000 - $24,999", "mean": 34.7, "n": 714}, {"StratificationCategory1": "Age (years)", "Stratification1": "35 - 44", "mean": 34.6, "n": 714}, {"StratificationCategory1": "Income", "Stratification1": "$25,000 - $34,999", "mean": 33.3, "n": 714}],
+  distIncome: {"$15,000 - $24,999": [38.8, 34.4, 37.0, 39.9, 31.2, 28.4, 39.6, 45.0, 34.1, 34.7, 41.6, 25.0, 32.1, 37.7, 39.1, 40.6, 36.5, 44.4, 46.7, 38.3, 36.1, 31.8, 42.5, 33.6, 49.1, 34.2, 37.0, 39.8, 38.7, 36.4, 34.0, 38.7, 34.6, 33.9, 33.4, 42.1, 40.5, 39.5, 38.4, 44.5, 35.7, 45.7, 40.9, 40.5, 26.5, 40.0, 36.2, 36.8, 41.7, 40.0, 41.8], "$25,000 - $34,999": [45.9, 39.1, 39.8, 39.4, 36.6, 29.8, 38.2, 33.2, 31.1, 35.6, 37.6, 26.5, 41.6, 36.4, 40.0, 40.7, 39.5, 42.9, 46.0, 35.4, 36.1, 28.9, 38.9, 33.9, 50.3, 37.7, 36.2, 37.6, 44.2, 36.7, 32.5, 43.8, 30.6, 36.5, 34.1, 33.5, 39.6, 33.8, 35.1, 35.2, 36.5, 44.3, 33.8, 40.4, 28.8, 37.4, 35.0, 35.7, 41.9, 37.7, 34.5], "$35,000 - $49,999": [41.4, 30.4, 35.6, 43.3, 30.4, 28.0, 34.4, 36.2, 27.9, 29.7, 37.1, 27.9, 32.9, 37.0, 42.3, 38.9, 41.1, 41.0, 41.0, 35.9, 37.5, 30.0, 37.4, 36.7, 38.4, 35.1, 37.8, 36.7, 36.3, 32.1, 28.8, 41.1, 32.1, 43.3, 36.7, 43.2, 40.7, 37.4, 35.2, 35.1, 41.1, 43.6, 37.9, 37.7, 38.1, 31.0, 34.2, 33.6, 45.4, 41.4, 34.2], "$50,000 - $74,999": [40.7, 31.6, 37.0, 41.1, 30.5, 28.6, 38.2, 42.4, 30.5, 27.6, 37.4, 28.1, 36.0, 36.3, 44.1, 39.3, 41.0, 36.3, 39.6, 34.7, 39.0, 28.5, 37.4, 36.1, 43.3, 35.4, 31.0, 36.9, 38.3, 31.8, 29.6, 28.5, 33.7, 40.8, 37.9, 39.2, 37.7, 35.6, 36.4, 31.1, 39.3, 36.2, 42.0, 40.1, 36.0, 33.6, 37.7, 34.8, 41.7, 37.7, 33.3], "$75,000 or greater": [43.3, 35.0, 33.4, 37.5, 33.5, 23.9, 34.8, 37.2, 30.8, 29.1, 39.3, 28.2, 33.7, 35.2, 38.0, 34.4, 41.3, 31.9, 38.3, 33.2, 35.4, 30.4, 38.3, 34.5, 38.4, 37.1, 29.7, 41.1, 33.2, 28.5, 30.8, 31.6, 32.1, 32.1, 40.9, 43.7, 39.5, 39.7, 34.4, 32.3, 31.5, 33.2, 40.2, 33.4, 32.3, 27.8, 31.5, 34.0, 43.4, 40.1, 31.5], "Less than $15,000": [41.4, 33.3, 36.0, 39.6, 32.4, 33.2, 37.4, 32.8, 28.8, 34.1, 36.0, 36.2, 41.9, 38.2, 38.8, 42.1, 32.2, 36.7, 44.5, 35.4, 40.8, 30.4, 39.6, 31.9, 56.6, 40.5, 29.5, 40.6, 49.1, 34.2, 34.7, 35.4, 35.5, 40.0, 40.2, 41.9, 39.0, 37.9, 36.2, 36.6, 40.4, 28.8, 41.4, 38.2, 35.3, 29.0, 36.8, 37.0, 40.8, 43.6, 41.4]},
+  distEdu: {"College graduate": [35.9, 30.6, 25.7, 35.3, 20.5, 19.4, 24.7, 32.5, 20.5, 24.9, 29.3, 20.0, 27.1, 28.7, 35.8, 35.4, 33.1, 32.8, 29.9, 28.1, 28.0, 23.4, 30.5, 28.4, 37.0, 30.3, 25.6, 34.2, 28.6, 25.5, 21.9, 25.4, 23.5, 31.1, 35.0, 32.2, 33.7, 27.7, 28.3, 25.3, 31.4, 36.1, 33.2, 31.7, 28.8, 21.5, 27.2, 25.1, 35.7, 34.0, 25.4], "High school graduate": [39.9, 33.0, 35.2, 40.1, 31.9, 28.7, 35.7, 38.3, 34.7, 33.2, 37.5, 31.9, 34.5, 34.8, 39.3, 36.8, 40.2, 38.6, 41.5, 36.9, 34.9, 30.6, 37.2, 33.7, 39.1, 37.2, 33.3, 37.6, 35.9, 34.1, 30.7, 36.1, 31.9, 34.8, 36.9, 39.3, 35.6, 35.5, 36.2, 32.9, 37.2, 40.6, 38.8, 37.1, 30.6, 33.7, 33.5, 35.2, 42.4, 36.8, 33.3], "Less than high school": [36.7, 36.3, 39.5, 37.6, 39.9, 29.6, 39.6, 35.6, 38.8, 34.0, 42.6, 26.6, 36.4, 39.2, 34.1, 31.2, 38.9, 35.6, 43.6, 32.9, 39.2, 31.4, 41.6, 33.0, 47.2, 33.5, 33.1, 43.3, 40.4, 37.3, 30.8, 41.1, 35.3, 37.2, 32.3, 34.2, 37.2, 40.3, 35.8, 41.1, 36.2, 39.8, 35.6, 39.6, 34.8, 33.2, 39.8, 34.4, 39.9, 36.3, 33.3], "Some college or technical school": [41.3, 37.4, 36.5, 40.8, 31.6, 28.7, 36.9, 40.0, 30.3, 30.2, 36.5, 29.9, 35.1, 38.4, 41.2, 38.7, 39.3, 40.0, 42.3, 35.2, 35.3, 28.6, 39.0, 35.6, 41.3, 36.4, 33.7, 39.6, 34.9, 33.9, 32.4, 38.5, 33.5, 36.9, 39.2, 39.6, 40.3, 36.4, 38.1, 33.1, 34.7, 33.9, 40.8, 36.7, 32.7, 33.5, 36.1, 35.3, 45.1, 41.4, 37.0]},
+  distRace: {"Hispanic": [30.1, 43.2, 38.9, 35.9, 37.5, 32.4, 37.3, 31.3, 30.1, 28.9, 36.2, 35.0, 34.8, 37.5, 36.0, 38.2, 40.5, 34.4, 41.2, 30.1, 38.0, 33.0, 38.7, 35.9, 30.2, 34.0, 28.9, 39.1, 40.4, 34.9, 31.4, 39.9, 34.9, 38.4, 42.5, 33.8, 39.5, 35.1, 38.9, 37.4, 32.4, 46.4, 39.6, 37.7, 37.8, 25.3, 30.6, 36.4, 38.2, 36.3, 31.5], "NH American Indian/Alaska Native": [37.4, 42.1, 56.4, 43.2, 50.4, 36.0, 30.8, 24.4, 42.3, 41.3, 18.2, 45.2, 38.4, 42.6, 30.6, 35.7, 23.9, 39.85897435897436, 40.9, 49.6, 46.3, 46.0, 52.6, 39.85897435897436, 45.8, 46.9, 43.1, 50.2, 46.7, 40.3, 44.6, 20.0, 39.5, 33.0, 43.3, 32.6, 33.4, 26.5, 47.1, 44.1, 43.1], "NH Hawaiian/Pacific Islander": [28.6, 51.9, 17.9, 69.0, 49.7], "Non-Hispanic 2 or more races": [39.2, 30.7, 50.9, 50.6, 31.8, 22.9, 28.4, 35.8, 22.3, 23.7, 35.4, 34.9, 35.0, 36.7, 42.5, 36.4, 35.6, 32.5, 38.4, 26.1, 34.2, 23.1, 31.8, 34.2, 40.9, 34.4, 41.4, 35.1, 36.4, 31.5, 28.5, 27.9, 39.9, 51.4, 41.8, 36.2, 33.6, 38.2, 26.1, 33.3, 40.9, 40.5, 24.9, 28.4, 27.3, 33.4, 39.2, 30.8, 39.4, 32.7], "Non-Hispanic Asian": [14.6, 18.3, 12.7, 7.1, 9.6, 18.7, 8.5, 12.4, 13.0, 18.9, 14.0775, 15.2, 12.5, 12.8, 14.0, 14.0775, 14.0775, 10.1, 11.4, 12.4, 13.0, 23.8, 23.4, 14.7, 21.3, 11.2, 12.8, 23.9, 14.7, 15.4, 14.0775, 12.6, 11.5, 17.0, 5.8, 17.0, 5.2, 14.0775, 12.4, 14.3, 14.3, 16.7, 10.7, 12.6, 16.6], "Non-Hispanic Black": [48.0, 36.6, 30.0, 48.1, 38.7, 27.4, 39.9, 44.4, 36.8, 41.6, 43.9, 44.9, 40.0, 45.4, 43.6, 45.6, 41.2, 45.8, 45.4, 40.7, 36.1, 43.8, 36.2, 47.6, 42.7, 40.6, 36.0, 38.8, 35.6, 36.0, 43.4, 30.0, 40.3, 40.0, 27.6, 42.9, 37.2, 44.5, 30.8, 45.6, 43.4, 52.7, 19.6, 44.5, 36.5, 48.0, 45.4], "Non-Hispanic Other": [40.1, 31.7, 30.2, 26.6, 36.8, 32.727586206896554, 32.1, 20.2, 28.4, 39.1, 32.7, 32.727586206896554, 34.1, 40.2, 26.9, 30.1, 38.4, 27.4, 32.727586206896554, 38.5, 24.4, 29.0, 32.727586206896554, 41.5, 27.2, 32.7, 29.7, 36.7, 32.727586206896554, 17.6, 43.5, 35.9, 33.6, 43.8], "Non-Hispanic White": [36.3, 32.8, 29.7, 37.5, 26.5, 23.4, 30.6, 35.9, 16.4, 28.1, 32.8, 20.2, 32.7, 34.0, 38.8, 36.8, 37.3, 37.2, 36.7, 33.6, 29.9, 26.8, 35.8, 31.9, 37.8, 33.9, 29.8, 37.6, 32.3, 31.5, 26.6, 28.4, 29.0, 32.5, 36.0, 37.2, 36.5, 34.2, 34.0, 30.0, 32.1, 36.4, 36.3, 34.3, 29.7, 29.3, 31.4, 32.3, 42.0, 37.4, 32.1]},
+};</script>
+  <script>/* ============================================================================
+   CHARTS  —  visual registry for the dashboard board
+   Each entry: { name, tool, kind, w, h, render(el, ctx) }
+   `render` draws into the given element (already sized in board pixels).
+   Plotly tiles always render at their board-pixel size; the whole board is
+   CSS-scaled by board.js, so charts stay crisp and never need re-rendering on
+   window resize — only on user resize of an individual tile.
+   ============================================================================ */
+(function () {
+  const C = {
+    ink: '#2C2416', inkSoft: '#7A6E62', hair: 'rgba(44,36,22,0.08)', hair2: 'rgba(44,36,22,0.16)',
+    red: '#C00707', taupe: '#7A6E62', mint: '#E5EEE4', sage: '#A8C5BA',
+    green: '#C0E1D2', tan: '#C8B89A', rose: '#DC9B9B',
+  };
+  const REGION = { South: '#C00707', Northeast: '#7A9BAA', Midwest: '#C8B89A', West: '#A8C5BA' };
+  const SEQ = [[0, '#F6F4E8'], [0.3, '#E5EEE4'], [0.55, '#C0E1D2'], [0.75, '#A8B8B0'], [0.88, '#C8908A'], [1, '#B06060']];
+  const INC = ['#B06060', '#C00707', '#C8B89A', '#E5EEE4', '#C0E1D2', '#7A9BAA'];
+  const CAT = { 'Race/Ethnicity': '#C00707', 'Income': '#C8B89A', 'Age (years)': '#7A9BAA', 'Education': '#A8C5BA', 'Sex': '#C0E1D2' };
+  const FONT = 'Space Grotesk, sans-serif';
+  const MONO = "'JetBrains Mono', monospace";
+
+  function baseLayout(extra) {
+    return Object.assign({
+      paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: C.ink, size: 13, family: FONT },
+      margin: { r: 16, t: 14, l: 44, b: 36 },
+      xaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, tickfont: { size: 11, color: C.inkSoft } },
+      yaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, tickfont: { size: 11, color: C.inkSoft } },
+      showlegend: false,
+    }, extra || {});
+  }
+  const CFG = { displayModeBar: false, responsive: false };
+  function size(el) { return { width: el.clientWidth, height: el.clientHeight }; }
+
+  // ── KPI big number + plain-language description ──────────────────────────────
+  function kpi(el, { value, suffix, label, sub, color, mono }) {
+    el.innerHTML = `<div class="kpi-wrap" style="--kc:${color}">
+        <div class="kpi-val"><span class="kpi-num">0</span><span class="kpi-suf">${suffix || ''}</span></div>
+        <div class="kpi-lbl">${label}</div>
+        <div class="kpi-sub">${sub || ''}</div>
+      </div>`;
+    const numEl = el.querySelector('.kpi-num');
+    const dec = (mono || 0);
+    let t0 = null; const dur = 950;
+    function step(t) {
+      if (!t0) t0 = t;
+      const p = Math.min(1, (t - t0) / dur);
+      const e = 1 - Math.pow(1 - p, 3);
+      numEl.textContent = (value * e).toFixed(dec);
+      if (p < 1) requestAnimationFrame(step);
+      else numEl.textContent = value.toFixed(dec);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // ── Map (choropleth) with embedded year control ───────────────────────────────
+  function renderMap(el, ctx) {
+    el.innerHTML = `<div class="map-ctrl">
+        <span class="map-ctrl-lbl">YEAR</span>
+        <input type="range" class="yr-range" min="2011" max="2024" step="1" value="${ctx.year}">
+        <span class="yr-out">${ctx.year}</span>
+        <span class="map-avg"></span>
+      </div><div class="map-plot"></div>`;
+    const plot = el.querySelector('.map-plot');
+    const out = el.querySelector('.yr-out');
+    const avg = el.querySelector('.map-avg');
+    function draw(year) {
+      const d = DATA.map.filter(r => r.YearStart === year);
+      const trace = {
+        type: 'choropleth', locationmode: 'USA-states',
+        locations: d.map(r => r.LocationAbbr), z: d.map(r => r.obesity_rate),
+        zmin: 22, zmax: 42, colorscale: SEQ,
+        marker: { line: { color: '#FFFDF5', width: 1 } },
+        colorbar: { title: { text: '', font: { color: C.inkSoft, size: 10 } }, tickformat: '.0f', len: 0.78, thickness: 12, x: 0.97, tickfont: { color: C.inkSoft, size: 10, family: MONO } },
+        hovertemplate: '<b>%{hovertext}</b><br>Obesity %{z:.1f}%<extra></extra>',
+        hovertext: d.map(r => r.LocationDesc),
+      };
+      const labels = {
+        type: 'scattergeo', locationmode: 'USA-states', mode: 'text',
+        locations: d.map(r => r.LocationAbbr), text: d.map(r => r.LocationAbbr),
+        textfont: { family: MONO, size: 9.5, color: d.map(r => r.obesity_rate >= 35 ? '#FFF7E8' : '#3A2A10') },
+        hoverinfo: 'skip', showlegend: false,
+      };
+      const layout = baseLayout({
+        margin: { r: 0, t: 0, l: 0, b: 0 },
+        geo: { scope: 'usa', projection: { type: 'albers usa' }, showlakes: false, coastlinecolor: 'rgba(0,0,0,0)', landcolor: '#FFFDF5', bgcolor: 'rgba(0,0,0,0)', showframe: false, subunitcolor: '#FFFDF5' },
+      });
+      layout.width = plot.clientWidth; layout.height = plot.clientHeight;
+      Plotly.react(plot, [trace, labels], layout, CFG);
+      const a = (d.reduce((s, r) => s + r.obesity_rate, 0) / d.length).toFixed(1);
+      avg.textContent = `avg ${a}%`;
+      updateKPIsForYear(year);
+    }
+    const r = el.querySelector('.yr-range');
+    r.addEventListener('input', () => { ctx.year = +r.value; out.textContent = r.value; draw(ctx.year); updateKPIsForYear(ctx.year); });
+    requestAnimationFrame(() => draw(ctx.year));
+  }
+
+  // ── Trends over time ──────────────────────────────────────────────────────────
+  function renderTrend(el,ctx) {
+    const traces = [];
+    for (const [region, color] of Object.entries(REGION)) {
+      const pts = DATA.trend.regional.filter(r => r.region === region);
+      traces.push({ x: pts.map(p => p.YearStart), y: pts.map(p => p.obesity_rate), type: 'scatter', mode: 'lines', name: region, line: { width: 3, color, shape: 'spline' }, hovertemplate: `${region} %{y:.1f}%<extra></extra>` });
+    }
+    const nat = DATA.trend.national;
+    traces.push({ x: nat.map(p => p.YearStart), y: nat.map(p => p.obesity_rate), type: 'scatter', mode: 'lines', name: 'US avg', line: { width: 2, color: C.ink, dash: 'dot' }, hovertemplate: 'US avg %{y:.1f}%<extra></extra>' });
+    const layout = baseLayout({
+    xaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, dtick: 3, tickfont: { size: 11, color: C.inkSoft } },
+    yaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, ticksuffix: '%', tickfont: { size: 11, color: C.inkSoft } },
+    hovermode: 'x unified', hoverlabel: {
+    bgcolor: '#FFFDF5',
+    bordercolor: '#2C2416',
+    font: { family: "'JetBrains Mono', monospace", size: 11, color: '#2C2416' },
+    namelength: -1
+  },
+    shapes: [{
+    type: 'line', x0: ctx.year, x1: ctx.year,
+    y0: 0, y1: 1, yref: 'paper',
+    line: { color: '#2C2416', dash: 'dot', width: 2 }
+  }]
+});Object.assign(layout, size(el));
+    Plotly.newPlot(el, traces, layout, CFG);
+    el._updateYear = (yr) => Plotly.relayout(el, {
+    'shapes[0].x0': yr, 'shapes[0].x1': yr
+});
+  }
+
+  // ── Scatter: activity vs obesity ─────────────────────────────────────────────
+  function renderScatter(el) {
+    const traces = [];
+    for (const [region, color] of Object.entries(REGION)) {
+      const pts = DATA.scatter.points.filter(p => p.region === region);
+      traces.push({ x: pts.map(p => p.active), y: pts.map(p => p.obesity_rate), type: 'scatter', mode: 'markers', name: region, marker: { size: 10, color, opacity: 0.9, line: { width: 1, color: '#FFFDF5' } }, hovertemplate: '<b>%{hovertext}</b><br>active %{x:.1f}% · obesity %{y:.1f}%<extra></extra>', hovertext: pts.map(p => p.LocationAbbr) });
+    }
+    traces.push({ x: DATA.scatter.trend_x, y: DATA.scatter.trend_y, type: 'scatter', mode: 'lines', line: { width: 2, color: C.ink, dash: 'dash' }, hoverinfo: 'skip' });
+    const layout = baseLayout({ xaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, ticksuffix: '%', title: { text: 'Physically active', font: { size: 11, color: C.inkSoft } }, tickfont: { size: 11, color: C.inkSoft } }, yaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, ticksuffix: '%', tickfont: { size: 11, color: C.inkSoft } }, annotations: [{ x: 1, y: 1, xref: 'paper', yref: 'paper', text: `r = ${DATA.scatter.r}`, showarrow: false, font: { family: MONO, size: 12, color: C.ink }, bgcolor: '#E5EEE4', borderpad: 4, xanchor: 'right', yanchor: 'top' }] });
+    Object.assign(layout, size(el));
+    Plotly.newPlot(el, traces, layout, CFG);
+  }
+
+  // ── Income–obesity gap ribbon ────────────────────────────────────────────────
+function renderGap(el) {
+  const x = DATA.gap.map(d => d.YearStart);
+  const lo = DATA.gap.map(d => d.low_15k), hi = DATA.gap.map(d => d.high_75k);
+  const mid = DATA.gap.map(d => (d.low_15k + d.high_75k) / 2);
+  const traces = [
+    { x: [...x, ...[...x].reverse()], y: [...lo, ...[...mid].reverse()],
+      fill: 'toself', fillcolor: hexToRgba(C.red, 0.13),
+      line: { width: 0 }, hoverinfo: 'skip' },
+    { x: [...x, ...[...x].reverse()], y: [...mid, ...[...hi].reverse()],
+      fill: 'toself', fillcolor: hexToRgba(C.green, 0.13),
+      line: { width: 0 }, hoverinfo: 'skip' },
+    { x, y: lo, type: 'scatter', mode: 'lines', name: 'Low (<$25k)',
+      line: { width: 3.5, color: C.red },
+      hovertemplate: 'Low <$25k: %{y:.1f}%<extra></extra>' },
+    { x, y: mid, type: 'scatter', mode: 'lines', name: 'Medium ($25–75k)',
+      line: { width: 2.5, color: C.tan, dash: 'dot' },
+      hovertemplate: 'Medium $25–75k: %{y:.1f}%<extra></extra>' },
+    { x, y: hi, type: 'scatter', mode: 'lines', name: 'High ($75k+)',
+      line: { width: 3.5, color: C.taupe },
+      hovertemplate: 'High $75k+: %{y:.1f}%<extra></extra>' },
+  ];
+  const layout = baseLayout({
+    xaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, dtick: 3,
+             tickfont: { size: 11, color: C.inkSoft } },
+    yaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, ticksuffix: '%',
+             tickfont: { size: 11, color: C.inkSoft } },
+    hovermode: 'x unified',
+    showlegend: false,
+    hoverlabel: { bgcolor: '#FFFDF5', bordercolor: C.ink,
+                  font: { family: MONO, size: 11, color: C.ink },
+                  namelength: -1 },
+  });
+  Object.assign(layout, size(el));
+  Plotly.newPlot(el, traces, layout, CFG);
+}
+
+  // ── Correlation heatmap ──────────────────────────────────────────────────────
+  function renderCorr(el) {
+    const trace = { type: 'heatmap', z: DATA.corr.z, x: DATA.corr.x, y: DATA.corr.y, colorscale: [[0, '#7A9BAA'], [0.5, '#F6F4E8'], [1, '#C00707']], zmin: -1, zmax: 1, xgap: 3, ygap: 3, text: DATA.corr.z.map(r => r.map(v => v.toFixed(2))), texttemplate: '%{text}', textfont: { size: 13, family: MONO, color: C.ink }, showscale: false, hovertemplate: '%{y} ↔ %{x}<br>r = %{z:.2f}<extra></extra>' };
+    const layout = baseLayout({ margin: { r: 8, t: 8, l: 78, b: 70 }, xaxis: { side: 'bottom', tickangle: -35, tickfont: { size: 10, color: C.inkSoft } }, yaxis: { autorange: 'reversed', tickfont: { size: 10, color: C.inkSoft } } });
+    Object.assign(layout, size(el));
+    Plotly.newPlot(el, [trace], layout, CFG);
+  }
+
+  // ── Horizontal distribution bars ─────────────────────────────────────────────
+  function distBar(el, data, order, labels, colors) {
+    const keys = order || Object.keys(data);
+    const means = keys.map(k => { const g = data[k] || [0]; return +(g.reduce((s, v) => s + v, 0) / g.length).toFixed(1); });
+    const trace = { type: 'bar', orientation: 'h', x: means, y: labels, marker: { color: colors.slice(0, labels.length), line: { width: 0 } }, text: means.map(v => v + '%'), textposition: 'outside', textfont: { size: 12, family: MONO, color: C.ink }, cliponaxis: false, hovertemplate: '%{y}: %{x}%<extra></extra>' };
+    const layout = baseLayout({ margin: { r: 46, t: 8, l: 8, b: 28 }, bargap: 0.32, xaxis: { gridcolor: C.hair, linecolor: 'rgba(0,0,0,0)', zeroline: false, ticksuffix: '%', tickfont: { size: 10, color: C.inkSoft } }, yaxis: { automargin: true, tickfont: { size: 11, color: C.ink } } });
+    Object.assign(layout, size(el));
+    Plotly.newPlot(el, [trace], layout, CFG);
+  }
+  function renderIncome(el) { const k = Object.keys(DATA.distIncome).sort(); const labels = k.map(x => { const m = {'Less than $15,000':'<$15k','$15,000 - $24,999':'$15–25k','$25,000 - $34,999':'$25–35k','$35,000 - $49,999':'$35–50k','$50,000 - $74,999':'$50–75k','$75,000 or greater':'$75k+'}; return m[x]||x; }); distBar(el, DATA.distIncome, k, labels, INC); }
+  function renderEdu(el) { const k = Object.keys(DATA.distEdu).sort(); const labels = k.map(x => x.length > 24 ? x.slice(0,22)+'…' : x); distBar(el, DATA.distEdu, k, labels, [C.red, C.tan, C.mint, C.green]); }
+  function renderRace(el) { const k = Object.keys(DATA.distRace).sort(); const labels = k.map(x => x.length > 20 ? x.slice(0,18)+'…' : x); distBar(el, DATA.distRace, k, labels, [C.red, C.taupe, C.tan, C.sage, C.green, '#FF6A1A', '#00BDB4', '#6A2BFF']); }
+
+  // ── Most at-risk groups ──────────────────────────────────────────────────────
+  function renderAtRisk(el) {
+    const data = DATA.atrisk.slice(0, 10).slice().reverse();
+    const trace = { type: 'bar', orientation: 'h', x: data.map(d => d.mean), y: data.map(d => d.Stratification1), marker: { color: data.map(d => CAT[d.StratificationCategory1] || '#999'), line: { width: 0 } }, text: data.map(d => d.mean + '%'), textposition: 'outside', textfont: { size: 11, family: MONO, color: C.ink }, cliponaxis: false, hovertemplate: '%{y}: %{x}%<extra></extra>' };
+    const layout = baseLayout({ margin: { r: 44, t: 8, l: 8, b: 28 }, bargap: 0.3, xaxis: { gridcolor: C.hair, linecolor: 'rgba(0,0,0,0)', zeroline: false, range: [0, 46], ticksuffix: '%', tickfont: { size: 10, color: C.inkSoft } }, yaxis: { automargin: true, tickfont: { size: 10.5, color: C.ink } } });
+   Object.assign(layout, size(el));
+    Plotly.newPlot(el, [trace], layout, CFG);
+  }
+
+  // ── Association rules (insight tile) ─────────────────────────────────────────
+  function renderRules(el) {
+    const rules = [
+      { m: '2.0×', t: 'Low-income people are more likely to be <b>both inactive and obese</b>.', c: C.red },
+      { m: '98%', t: 'Obese + low-income individuals are also <b>physically inactive</b>.', c: C.tan },
+      { m: '94%', t: 'Low-income show above-median inactivity — <b>1.9× random</b>.', c: C.taupe },
+      { m: '70%', t: 'Inactive + low-income are also obese — <b>1.4× baseline</b>.', c: C.green },
+    ];
+    el.innerHTML = `<div class="rules">${rules.map(r => `
+      <div class="rule">
+        <div class="rule-m" style="--rc:${r.c}">${r.m}</div>
+        <div class="rule-t">${r.t}</div>
+      </div>`).join('')}</div>`;
+  }
+
+  // ── Box plot: obesity spread by region (distribution comparison) ─────────────
+  function hexToRgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  function renderBox(el) {
+    const regions = ['South', 'Northeast', 'Midwest', 'West'];
+    const latest = DATA.map.filter(m => m.YearStart === 2024);
+    const traces = regions.map(r => ({
+      type: 'box', name: r,
+      y: latest.filter(m => m.region === r).map(m => m.obesity_rate),
+      boxpoints: 'all', jitter: 0.45, pointpos: 0, whiskerwidth: 0.6,
+      marker: { color: REGION[r], size: 5, opacity: 0.6, line: { width: 0.5, color: '#FFFDF5' } },
+      line: { color: C.ink, width: 1.5 }, fillcolor: hexToRgba(REGION[r], 0.45),
+      hovertemplate: `${r}<br>%{y:.1f}%<extra></extra>`,
+    }));
+    const layout = baseLayout({
+      margin: { r: 14, t: 10, l: 40, b: 30 }, boxgap: 0.4,
+      xaxis: { gridcolor: 'rgba(0,0,0,0)', linecolor: C.hair2, zeroline: false, tickfont: { size: 11, color: C.ink } },
+      yaxis: { gridcolor: C.hair, linecolor: C.hair2, zeroline: false, ticksuffix: '%', tickfont: { size: 11, color: C.inkSoft } },
+    });
+    Object.assign(layout, size(el));
+    Plotly.newPlot(el, traces, layout, CFG);
+  }
+
+  // Real-data KPI cards (computed once on init)
+  function getKPIs() {
+    const d2024 = DATA.map.filter(r => r.YearStart === 2024);
+    const avg = +(d2024.reduce((s,r) => s + r.obesity_rate, 0) / d2024.length).toFixed(1);
+    const sorted = [...d2024].sort((a,b) => b.obesity_rate - a.obesity_rate);
+    const hi = sorted[0], lo = sorted[sorted.length-1];
+    const lowGrp = DATA.gap[DATA.gap.length-1].low_15k;
+    const hiGrp = DATA.gap[DATA.gap.length-1].high_75k;
+    const gapVal = +(lowGrp - hiGrp).toFixed(1);
+    const d2011 = DATA.map.filter(r => r.YearStart === 2011);
+    const avg11 = +(d2011.reduce((s,r) => s + r.obesity_rate, 0) / d2011.length).toFixed(1);
+    const delta = +(avg - avg11).toFixed(1);
+    return { avg, hi, lo, gapVal, delta };
+  }
+
+
+  window.CHARTS = {
+    'kpi-avg': { name: 'National Average', tool: 'KPI', kind: 'kpi', w: 380, h: 150 },
+    'kpi-high': { name: 'Highest State', tool: 'KPI', kind: 'kpi', w: 380, h: 150 },
+    'kpi-low': { name: 'Lowest State', tool: 'KPI', kind: 'kpi', w: 380, h: 150 },
+    'kpi-gap': { name: 'Income Gap', tool: 'KPI', kind: 'kpi', w: 380, h: 150 },
+    'map': { name: 'Geographic Distribution', tool: 'Choropleth', kind: 'plot', w: 772, h: 456, desc: 'Drag slider to change year', render: renderMap },
+   'trend': { name: 'Trends Over Time', tool: 'Line', kind: 'plot', w: 780, h: 220, desc: 'Regional obesity 2011–2024', render: (el, ctx) => renderTrend(el, ctx) },'scatter': { name: 'Activity vs Obesity', tool: 'Scatter', kind: 'plot', w: 780, h: 220, desc: 'State-level PA vs obesity', render: renderScatter },
+    'gap': { name: 'Income–Obesity Gap', tool: 'Area', kind: 'plot', w: 512, h: 268, desc: 'Low vs high income gap', render: renderGap },
+    'corr': { name: 'Health Correlations', tool: 'Heatmap', kind: 'plot', w: 400, h: 268, desc: '5-metric Pearson matrix', render: renderCorr },
+    'atrisk': { name: 'Most At-Risk Groups', tool: 'Bar', kind: 'plot', w: 300, h: 268, desc: 'Ranked by mean obesity', render: renderAtRisk },
+    'rules': { name: 'Association Rules', tool: 'Apriori', kind: 'insight', w: 308, h: 268, desc: 'Income → inactivity & obesity', render: renderRules },
+    'income': { name: 'Obesity by Income', tool: 'Bar', kind: 'plot', w: 420, h: 260, desc: '2024', render: renderIncome },
+    'edu': { name: 'Obesity by Education', tool: 'Bar', kind: 'plot', w: 420, h: 260, desc: '2024', render: renderEdu },
+    'race': { name: 'Obesity by Race/Ethnicity', tool: 'Bar', kind: 'plot', w: 420, h: 260, desc: '2024', render: renderRace },
+    'box': { name: 'Obesity Spread by Region', tool: 'Box plot', kind: 'plot', w: 440, h: 268, desc: 'State-level variance', render: renderBox },
+  };
+  
+  function updateKPIsForYear(year) {
+    const d = DATA.map.filter(r => r.YearStart === year);
+    if (!d.length) return;
+    const avg = +(d.reduce((s, r) => s + r.obesity_rate, 0) / d.length).toFixed(1);
+    const sorted = [...d].sort((a, b) => b.obesity_rate - a.obesity_rate);
+    const hi = sorted[0], lo = sorted[sorted.length - 1];
+    const gapRow = DATA.gap.find(g => g.YearStart === year) || DATA.gap[DATA.gap.length - 1];
+    const gapVal = +(gapRow.low_15k - gapRow.high_75k).toFixed(1);
+    const d2011 = DATA.map.filter(r => r.YearStart === 2011);
+    const avg11 = +(d2011.reduce((s, r) => s + r.obesity_rate, 0) / d2011.length).toFixed(1);
+    const delta = +(avg - avg11).toFixed(1);
+    const deltaStr = delta > 0 ? `+${delta}` : `${delta}`;
+    const tileAvg  = document.querySelector('[data-kpi="kpi-avg"]');
+    const tileHigh = document.querySelector('[data-kpi="kpi-high"]');
+    const tileLow  = document.querySelector('[data-kpi="kpi-low"]');
+    const tileGap  = document.querySelector('[data-kpi="kpi-gap"]');
+    if (tileAvg)  { const b = tileAvg.querySelector('.tbody');  if (b) kpi(b, { value: avg,             suffix: '%',   label: 'Share of adults with obesity', sub: `U.S. average · ${year} · ${deltaStr} pts since 2011`, color: C.red, mono: 1 }); }
+    if (tileHigh) { const b = tileHigh.querySelector('.tbody'); if (b) kpi(b, { value: hi.obesity_rate, suffix: '%',   label: 'Most obese state',   sub: `${hi.LocationDesc} — ${hi.obesity_rate}% (${year})`,  color: C.tan,  mono: 1 }); }
+    if (tileLow)  { const b = tileLow.querySelector('.tbody');  if (b) kpi(b, { value: lo.obesity_rate, suffix: '%',   label: 'Least obese state',  sub: `${lo.LocationDesc} — ${lo.obesity_rate}% (${year})`,  color: C.green,   mono: 1 }); }
+    if (tileGap)  { const b = tileGap.querySelector('.tbody');  if (b) kpi(b, { value: gapVal,          suffix: 'pts', label: 'Obesity gap by income', sub: `Adults earning <$15k vs. $75k+ per year`,           color: C.taupe,  mono: 1 }); }
+    document.querySelectorAll('.plot').forEach(p => {
+    if (p._updateYear) p._updateYear(year);
+});
+  }
+
+  function setupKPIs() {
+    const k = getKPIs();
+    CHARTS['kpi-avg'].render  = (el) => kpi(el, { value: k.avg,             suffix: '%',   label: 'Share of adults with obesity', sub: `U.S. average · 2024 · up ${k.delta > 0 ? '+' + k.delta : k.delta} pts since 2011`, color: C.red, mono: 1 });
+    CHARTS['kpi-high'].render = (el) => kpi(el, { value: k.hi.obesity_rate, suffix: '%',   label: 'Most obese state',   sub: `${k.hi.LocationDesc} — ${k.hi.obesity_rate}% (2024)`, color: C.tan, mono: 1 });
+    CHARTS['kpi-low'].render  = (el) => kpi(el, { value: k.lo.obesity_rate, suffix: '%',   label: 'Least obese state',  sub: `${k.lo.LocationDesc} — ${k.lo.obesity_rate}% (2024)`, color: C.green,  mono: 1 });
+    CHARTS['kpi-gap'].render  = (el) => kpi(el, { value: k.gapVal,          suffix: 'pts', label: 'Obesity gap by income', sub: `Adults earning <$15k vs. $75k+ per year`,           color: C.taupe, mono: 1 });
+  }
+
+  // Call once to set real KPI values
+  setupKPIs();
+
+  // Re-run KPIs after any chart rebuild (palette change, etc.)
+  window.__rerenderKPIs = setupKPIs;
+})();
+</script>
+  <script>/* ============================================================================
+   BOARD  —  Power-BI-style canvas engine
+   Fixed 1600×900 board scaled to fit the stage. Tiles are free-positioned,
+   draggable, resizable, addable from the palette, removable, and persisted.
+   ============================================================================ */
+(function () {
+  const BOARD_W = 1600, BOARD_H = 900, GRID = 8, MIN_W = 168, MIN_H = 96;
+  const KEY = 'obesity-board-v4';
+
+  const DEFAULT = [
+    { type: 'kpi-avg', x: 24, y: 24, w: 372, h: 150 },
+    { type: 'kpi-high', x: 412, y: 24, w: 372, h: 150 },
+    { type: 'kpi-low', x: 800, y: 24, w: 372, h: 150 },
+    { type: 'kpi-gap', x: 1188, y: 24, w: 388, h: 150 },
+    { type: 'map', x: 24, y: 190, w: 760, h: 424 },
+    { type: 'trend', x: 800, y: 190, w: 776, h: 203 },
+    { type: 'scatter', x: 800, y: 405, w: 776, h: 209 },
+    { type: 'gap', x: 24, y: 630, w: 500, h: 246 },
+    { type: 'corr', x: 540, y: 630, w: 392, h: 246 },
+    { type: 'atrisk', x: 948, y: 630, w: 300, h: 246 },
+    { type: 'rules', x: 1264, y: 630, w: 312, h: 246 },
+  ];
+
+  let tiles = [];
+  let ctx = { year: 2024 };
+  let mode = 'edit';
+  let uid = 1;
+  let addCascade = 0;
+
+  const board = document.getElementById('board');
+  const stage = document.getElementById('stage');
+
+  // ── persistence ──────────────────────────────────────────────────────────────
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify({ tiles, year: ctx.year, mode })); } catch (e) {}
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (s && Array.isArray(s.tiles) && s.tiles.length) {
+        tiles = s.tiles.map(t => ({ ...t, id: 't' + (uid++) }));
+        ctx.year = s.year || 2024; mode = s.mode || 'edit'; return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function snap(v) { return Math.round(v / GRID) * GRID; }
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+  // ── scaling ──────────────────────────────────────────────────────────────────
+  let scale = 1;
+  function fit() {
+    const pad = 0;
+    const sw = stage.clientWidth - pad, sh = stage.clientHeight - pad;
+    scale = Math.min(sw / BOARD_W, sh / BOARD_H);
+    board.style.transform = `translate(-50%,-50%) scale(${scale})`;
+  }
+
+  // ── tile rendering ─────────────────────────────────────────────────────────────
+  function makeTile(t) {
+    const meta = CHARTS[t.type];
+    if (!meta) return;
+    const el = document.createElement('div');
+    el.className = 'tile tile-' + meta.kind;
+    el.dataset.id = t.id;
+    if (t.type.startsWith('kpi-')) { el.dataset.kpi = t.type; }
+    el.style.left = t.x + 'px'; el.style.top = t.y + 'px';
+    el.style.width = t.w + 'px'; el.style.height = t.h + 'px';
+    el.innerHTML = `
+      <div class="tbar">
+        <div class="tbar-l"><span class="tname">${meta.name}</span></div>
+        <div class="tbar-r"><span class="ttool">${meta.tool}</span><button class="tx" title="Remove">✕</button></div>
+      </div>
+      <div class="tbody">${meta.desc ? `<span class="tdesc">${meta.desc}</span>` : ''}</div>
+      <div class="tgrip"></div>`;
+    board.appendChild(el);
+    const body = el.querySelector('.tbody');
+    t._el = el; t._body = body;
+    renderBody(t);
+    // remove
+    el.querySelector('.tx').addEventListener('click', (e) => { e.stopPropagation(); removeTile(t.id); });
+    // drag (whole tile via top bar)
+    enableDrag(t, el.querySelector('.tbar'));
+    // resize
+    enableResize(t, el.querySelector('.tgrip'));
+    // bring to front on press
+    el.addEventListener('pointerdown', () => bringFront(el));
+  }
+
+  function renderBody(t) {
+    const meta = CHARTS[t.type];
+    t._body.innerHTML = '';
+    if (meta.kind === 'plot') {
+      const c = document.createElement('div');
+      c.className = 'plot';
+      t._body.appendChild(c);
+      requestAnimationFrame(() => meta.render(c, ctx));
+    } else {
+      meta.render(t._body, ctx);
+    }
+  }
+
+  let zTop = 10;
+  function bringFront(el) { el.style.zIndex = (++zTop); }
+
+  function removeTile(id) {
+    const i = tiles.findIndex(t => t.id === id);
+    if (i < 0) return;
+    tiles[i]._el.remove();
+    tiles.splice(i, 1);
+    save();
+  }
+
+  function addTile(type) {
+    const meta = CHARTS[type];
+    const base = 40 + (addCascade % 6) * 28;
+    addCascade++;
+    const t = { id: 't' + (uid++), type, x: snap(base), y: snap(base + 60), w: meta.w, h: meta.h };
+    t.x = clamp(t.x, 0, BOARD_W - t.w); t.y = clamp(t.y, 0, BOARD_H - t.h);
+    tiles.push(t);
+    makeTile(t);
+    bringFront(t._el);
+    save();
+  }
+
+  // ── drag ───────────────────────────────────────────────────────────────────────
+  function enableDrag(t, handle) {
+    handle.addEventListener('pointerdown', (e) => {
+      if (mode !== 'edit') return;
+      if (e.target.closest('.tx')) return;
+      e.preventDefault();
+      const sx = e.clientX, sy = e.clientY, ox = t.x, oy = t.y;
+      t._el.classList.add('dragging');
+      function move(ev) {
+        const dx = (ev.clientX - sx) / scale, dy = (ev.clientY - sy) / scale;
+        t.x = clamp(snap(ox + dx), 0, BOARD_W - t.w);
+        t.y = clamp(snap(oy + dy), 0, BOARD_H - t.h);
+        t._el.style.left = t.x + 'px'; t._el.style.top = t.y + 'px';
+      }
+      function up() {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+        t._el.classList.remove('dragging');
+        save();
+      }
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+    });
+  }
+
+  // ── resize ───────────────────────────────────────────────────────────────────
+  function enableResize(t, grip) {
+    grip.addEventListener('pointerdown', (e) => {
+      if (mode !== 'edit') return;
+      e.preventDefault(); e.stopPropagation();
+      const sx = e.clientX, sy = e.clientY, ow = t.w, oh = t.h;
+      t._el.classList.add('resizing');
+      function move(ev) {
+        const dx = (ev.clientX - sx) / scale, dy = (ev.clientY - sy) / scale;
+        t.w = clamp(snap(ow + dx), MIN_W, BOARD_W - t.x);
+        t.h = clamp(snap(oh + dy), MIN_H, BOARD_H - t.y);
+        t._el.style.width = t.w + 'px'; t._el.style.height = t.h + 'px';
+      }
+      function up() {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+        t._el.classList.remove('resizing');
+        renderBody(t); // re-render chart at new size
+        save();
+      }
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+    });
+  }
+
+  // ── modes ───────────────────────────────────────────────────────────────────
+  function applyMode() {
+    document.body.dataset.mode = mode;
+    document.getElementById('modeBtn').textContent = mode === 'edit' ? 'View' : 'Edit';
+    document.getElementById('modeBtn').dataset.next = mode === 'edit' ? 'view' : 'edit';
+    if (mode === 'view') document.getElementById('palette').classList.remove('open');
+  }
+  function toggleMode() { mode = mode === 'edit' ? 'view' : 'edit'; applyMode(); save(); }
+
+  function buildPalette() {
+    const list = document.getElementById('palette-list');
+    list.innerHTML = '';
+    for (const [key, meta] of Object.entries(CHARTS)) {
+      const b = document.createElement('button');
+      b.className = 'pitem';
+      b.innerHTML = `<span class="pi-ic pi-${meta.kind}"></span><span class="pi-tx"><span class="pi-n">${meta.name}</span><span class="pi-t">${meta.tool}</span></span><span class="pi-add">＋</span>`;
+      b.addEventListener('click', () => addTile(key));
+      list.appendChild(b);
+    }
+  }
+
+  function render() {
+    board.querySelectorAll('.tile').forEach(n => n.remove());
+    tiles.forEach(makeTile);
+  }
+  window.__rerenderBoard = render;
+
+  function init() {
+    if (!load()) { tiles = DEFAULT.map(t => ({ ...t, id: 't' + (uid++) })); }
+    buildPalette();
+    render();
+    applyMode();
+    fit();
+    window.addEventListener('resize', fit);
+
+    document.getElementById('modeBtn').addEventListener('click', toggleMode);
+    document.getElementById('addBtn').addEventListener('click', () => {
+      document.getElementById('palette').classList.toggle('open');
+    });
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      tiles.forEach(t => t._el && t._el.remove());
+      tiles = DEFAULT.map(t => ({ ...t, id: 't' + (uid++) }));
+      ctx.year = 2024; addCascade = 0;
+      render(); save();
+    });
+    document.getElementById('palClose').addEventListener('click', () => {
+      document.getElementById('palette').classList.remove('open');
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>
